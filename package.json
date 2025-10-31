@@ -4,6 +4,12 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "author": "Mateus Santos",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mateussantoos/boilerplate-sankhya-react-vite"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

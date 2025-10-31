@@ -73,10 +73,15 @@ src/
   assets/*           # Logos and images
   global.css         # Global styles (Tailwind ready)
   main.tsx           # App entry
+  services/sankhya/  # Sankhya service layer (API, Database, Page utils)
 public/
   index.jsp          # JSP scaffold used in Sankhya
 vite.config.ts       # Build config (stable outputs, base "./", zip pack)
 ```
+
+## Documentation
+
+- **[Sankhya Service Layer Documentation](src/services/README.md)** — Complete guide to the service layer, including API reference, usage examples, and React Context integration.
 
 ## NPM Scripts
 
@@ -108,3 +113,11 @@ PRs are welcome! Please lint and keep changes focused.
 ## License
 
 MIT © 2025
+
+---
+
+<div align="center">
+
+Built with ☕ by M.S.
+
+</div>
