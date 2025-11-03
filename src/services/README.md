@@ -31,40 +31,37 @@ src/services/sankhya/
 This diagram shows the dependency flow. The `api.ts` module is the foundation, and all other modules depend on it to communicate with the Sankhya backend. The `index.ts` file bundles everything for easy consumption by the application.
 
 ```mermaid
-graph TD
-    subgraph YourApp [Your Application]
-        A[UI Components (e.g., App.tsx)]
-        C[SankhyaProvider]
-    end
+flowchart TB
+  subgraph YourApp [Your Application]
+    A["UI Components (App.tsx)"]
+    C[SankhyaProvider]
+  end
 
-    subgraph ServiceLayer [Service Layer: src/services/sankhya]
-        S(index.ts)
+  subgraph ServiceLayer ["Service Layer: src/services/sankhya"]
+    S["index.ts (sankhyaService)"]
+    API[api.ts]
+    D[database.ts]
+    P[page.ts]
+    U[utils.ts]
+  end
 
-        subgraph Modules
-            D[database.ts]
-            P[page.ts]
-            U[utils.ts]
-        end
+  subgraph SankhyaBackend ["Sankhya-W Backend"]
+    SBR["service.sbr endpoint"]
+  end
 
-        API[api.ts]
+  A --> C
+  C -->|imports sankhyaService| S
 
-        S --> D
-        S --> P
-        S --> U
-        S --> API
+  S --> API
+  S --> D
+  S --> P
+  S --> U
 
-        D -->|uses| API
-        P -->|uses| D
-        U -->|uses| API
-    end
+  D -->|uses| API
+  P -->|uses| D
+  U -->|uses| API
 
-    subgraph SankhyaBackend [Sankhya-W Backend]
-        SBR[service.sbr endpoint]
-    end
-
-    A -->|uses| C
-    C -->|imports sankhyaService from| S
-    API -->|HTTP Requests| SBR
+  API -->|HTTP Requests| SBR
 ```
 
 ## Modules
