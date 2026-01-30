@@ -14,17 +14,194 @@ import { Check, Calendar as CalendarIcon, Grid, List, Loader2, Search } from "lu
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useState, useEffect } from "react";
+import { useSankhya } from "@/contexts/sankhya-context";
 
 import { toast } from "sonner";
 
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
 export function CatalogSidebar() {
   const { filters, generation } = useCatalog();
+  const { executeQuery } = useSankhya();
+
+  const [companies, setCompanies] = useState<FilterOption[]>([]);
+  const [priceTables, setPriceTables] = useState<FilterOption[]>([]);
+  const [segments, setSegments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
+
+  useEffect(() => {
+    async function fetchFilters() {
+      setIsLoadingFilters(true);
+      try {
+        // Fetch static-ish lists
+        const comps = await executeQuery("SELECT CODEMP, NOMEFANTASIA FROM TSIEMP WHERE ATIVO = 'S' ORDER BY CODEMP");
+        setCompanies(comps.map((c: any) => ({ value: String(c.CODEMP), label: c.NOMEFANTASIA })));
+
+        const tabs = await executeQuery("SELECT CODTAB, DESCRTAB FROM TGFTAB WHERE CODTAB <= 25 AND (DTVIGOR <= GETDATE() OR DTVIGOR IS NULL) ORDER BY CODTAB");
+        setPriceTables(tabs.map((t: any) => ({ value: String(t.CODTAB), label: `${t.DESCRTAB} (${t.CODTAB})` })));
+
+        // Fetch Classifications using the user logic
+        const classQuery = `
+          WITH DADOS_CLASSIFICACAO AS (
+              SELECT C1.CODPROD, CLA.DESCRICAO,
+                  ROW_NUMBER() OVER (PARTITION BY C1.CODPROD ORDER BY 
+                      CASE WHEN C1.CODCLASSIF = 555 THEN 1 
+                           WHEN C1.CODCLASSIF IN (530, 531, 532, 553, 554) THEN 2 
+                           WHEN C1.CODCLASSIF BETWEEN 533 AND 552 THEN 3 ELSE 4 END, C1.CODCLASSIF ASC) AS RN
+              FROM TGFCLP C1 JOIN TGFCLA CLA ON CLA.CODCLASSIF = C1.CODCLASSIF
+          )
+          SELECT DISTINCT
+              MAX(CASE WHEN RN = 1 THEN DESCRICAO END) AS SEGMENTO,
+              MAX(CASE WHEN RN = 2 THEN DESCRICAO END) AS DEPARTAMENTO,
+              MAX(CASE WHEN RN = 3 THEN DESCRICAO END) AS CATEGORIA,
+              MAX(CASE WHEN RN = 4 THEN DESCRICAO END) AS SUBCATEGORIA
+          FROM DADOS_CLASSIFICACAO
+          GROUP BY CODPROD
+        `;
+        const classResults = await executeQuery(classQuery);
+        
+        const segs = new Set<string>();
+        const depts = new Set<string>();
+        const cats = new Set<string>();
+        const subcats = new Set<string>();
+
+        classResults.forEach((row: any) => {
+          if (row.SEGMENTO) segs.add(row.SEGMENTO);
+          if (row.DEPARTAMENTO) depts.add(row.DEPARTAMENTO);
+          if (row.CATEGORIA) cats.add(row.CATEGORIA);
+          if (row.SUBCATEGORIA) subcats.add(row.SUBCATEGORIA);
+        });
+
+        setSegments(Array.from(segs).sort());
+        setDepartments(Array.from(depts).sort());
+        setCategories(Array.from(new Set([...cats, ...subcats])).sort());
+
+      } catch (error) {
+        console.error("Erro ao carregar filtros:", error);
+        toast.error("Erro ao carregar filtros do Sankhya");
+      } finally {
+        setIsLoadingFilters(false);
+      }
+    }
+
+    fetchFilters();
+  }, [executeQuery]);
 
   const handleSwitchChange = (label: string, value: boolean, setter: (val: boolean) => void) => {
     setter(value);
     toast.success(`${label} ${value ? "ativado" : "desativado"}`, {
       description: "O catalogo foi atualizado.",
     });
+  };
+
+  const renderCheckboxList = (
+    title: string, 
+    options: (string | FilterOption)[], 
+    selected: string[], 
+    onChange: (val: string[]) => void,
+    height: string = "h-[150px]"
+  ) => {
+    const [search, setSearch] = useState("");
+    
+    const filteredOptions = options.filter(opt => {
+      const label = typeof opt === 'string' ? opt : opt.label;
+      return label.toLowerCase().includes(search.toLowerCase());
+    });
+
+    const allValues = options.map(opt => typeof opt === 'string' ? opt : opt.value);
+    const isAllSelected = allValues.length > 0 && allValues.every(val => selected.includes(val));
+    const isSomeSelected = allValues.some(val => selected.includes(val)) && !isAllSelected;
+
+    const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+        // Add all values that aren't already selected
+        const newSelection = Array.from(new Set([...selected, ...allValues]));
+        onChange(newSelection);
+      } else {
+        // Remove all values of this list from the selection
+        onChange(selected.filter(val => !allValues.includes(val)));
+      }
+    };
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-[12px] font-bold uppercase text-muted-foreground">{title}</Label>
+          {options.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id={`all-${title}`}
+                checked={isAllSelected}
+                onCheckedChange={handleSelectAll}
+                className={cn(isSomeSelected && "data-[state=unchecked]:bg-muted data-[state=unchecked]:text-muted-foreground")}
+              />
+              <Label htmlFor={`all-${title}`} className="text-[11px] cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+                Todos
+              </Label>
+            </div>
+          )}
+        </div>
+        
+        <div className="border rounded-md bg-white/50 overflow-hidden flex flex-col">
+          {options.length > 5 && (
+            <div className="relative border-b">
+              <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder={`Filtrar ${title.toLowerCase()}...`}
+                className="w-full pl-8 pr-2 py-1.5 text-xs bg-transparent outline-none placeholder:text-muted-foreground/60"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          )}
+          
+          <ScrollArea className={height}>
+            <div className="p-2 space-y-2 pt-1">
+              {filteredOptions.map((opt) => {
+                const value = typeof opt === 'string' ? opt : opt.value;
+                const label = typeof opt === 'string' ? opt : opt.label;
+                return (
+                  <div key={value} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`${title}-${value}`} 
+                      checked={selected.includes(value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          onChange([...selected, value]);
+                        } else {
+                          onChange(selected.filter((v) => v !== value));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`${title}-${value}`} className="font-normal cursor-pointer text-sm">
+                      {label}
+                    </Label>
+                  </div>
+                );
+              })}
+              {filteredOptions.length === 0 && options.length > 0 && (
+                <div className="text-xs text-muted-foreground p-2 text-center">Nenhum resultado para "{search}"</div>
+              )}
+              {options.length === 0 && !isLoadingFilters && (
+                <div className="text-xs text-muted-foreground p-2">Nenhuma opção encontrada</div>
+              )}
+              {isLoadingFilters && (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -81,22 +258,22 @@ export function CatalogSidebar() {
           {/* View Mode */}
           <div className="flex gap-2 p-1 bg-muted/20 rounded-lg">
              <Button 
-               variant={filters.viewMode === 'grid' ? 'default' : 'ghost'} 
-               size="sm" 
-               className="flex-1"
-               onClick={() => filters.setViewMode('grid')}
+                variant={filters.viewMode === 'grid' ? 'default' : 'ghost'} 
+                size="sm" 
+                className="flex-1"
+                onClick={() => filters.setViewMode('grid')}
              >
-               <Grid className="w-4 h-4 mr-2" />
-               Visualização A4
+                <Grid className="w-4 h-4 mr-2" />
+                Visualização A4
              </Button>
              <Button 
-               variant={filters.viewMode === 'list' ? 'default' : 'ghost'} 
-               size="sm" 
-               className="flex-1"
-               onClick={() => filters.setViewMode('list')}
+                variant={filters.viewMode === 'list' ? 'default' : 'ghost'} 
+                size="sm" 
+                className="flex-1"
+                onClick={() => filters.setViewMode('list')}
              >
-               <List className="w-4 h-4 mr-2" />
-               Lista
+                <List className="w-4 h-4 mr-2" />
+                Lista
              </Button>
           </div>
 
@@ -135,73 +312,15 @@ export function CatalogSidebar() {
             <AccordionItem value="filters">
                <AccordionTrigger>Filtros de Produtos</AccordionTrigger>
                <AccordionContent className="space-y-4 pt-2">
-                  {/* Empresa Filter */}
+                  
+                  {renderCheckboxList("Empresa", companies, filters.company || [], filters.setCompany, "h-[90px]")}
+                  
                   <div className="space-y-2">
-                    <Label>Empresa</Label>
-                    <div className="border rounded-md p-2">
-                      <ScrollArea className="h-[90px]">
-                        <div className="space-y-2">
-                          {[
-                            { value: "1", label: "VERON" },
-                            { value: "2", label: "JTX" },
-                            { value: "4", label: "LOV" },
-                          ].map((company) => (
-                            <div key={company.value} className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`company-${company.value}`} 
-                                checked={filters.company?.includes(company.value)}
-                                onCheckedChange={(checked) => {
-                                  const current = filters.company || [];
-                                  if (checked) {
-                                      filters.setCompany([...current, company.value]);
-                                  } else {
-                                      filters.setCompany(current.filter((v) => v !== company.value));
-                                  }
-                                }}
-                              />
-                              <Label htmlFor={`company-${company.value}`} className="font-normal cursor-pointer">
-                                {company.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </div>
-
-                  {/* Price Table Filter */}
-                  <div className="space-y-2">
-                    <Label>Tabela de Preço</Label>
-                    <div className="border rounded-md p-2">
+                    <Label className="text-[12px] font-bold uppercase text-muted-foreground">Tabela de Preço</Label>
+                    <div className="border rounded-md p-2 bg-white/50">
                       <ScrollArea className="h-[200px]">
                         <div className="space-y-2">
-                          {[
-                              { value: "0", label: "V1 (0)" },
-                              { value: "1", label: "VX (1)" },
-                              { value: "2", label: "A1 (2)" },
-                              { value: "3", label: "AX (3)" },
-                              { value: "4", label: "AXB (4)" },
-                              { value: "5", label: "CASA GRANDE (5)" },
-                              { value: "6", label: "A1 BAIÃO (6)" },
-                              { value: "8", label: "V20 (8)" },
-                              { value: "9", label: "CONFIANÇA (9)" },
-                              { value: "10", label: "PAGUE MENOS (10)" },
-                              { value: "11", label: "V16 (11)" },
-                              { value: "12", label: "IMPORTEC (12)" },
-                              { value: "13", label: "V5 (13)" },
-                              { value: "14", label: "SP5 (14)" },
-                              { value: "15", label: "V10 (15)" },
-                              { value: "16", label: "PREÇO 12 (16)" },
-                              { value: "17", label: "PREÇO 12,5 (17)" },
-                              { value: "18", label: "VY (18)" },
-                              { value: "19", label: "FUNCIONÁRIOS (19)" },
-                              { value: "20", label: "AB1 (20)" },
-                              { value: "21", label: "SP1 (21)" },
-                              { value: "22", label: "ASP1 (22)" },
-                              { value: "23", label: "SP16 (23)" },
-                              { value: "24", label: "SP10 (24)" },
-                              { value: "25", label: "SPX (25)" },
-                          ].map((tab) => (
+                          {priceTables.map((tab) => (
                             <div key={tab.value} className="flex items-center space-x-2">
                               <Checkbox 
                                 id={`tab-${tab.value}`} 
@@ -210,11 +329,11 @@ export function CatalogSidebar() {
                                   if (checked) {
                                     filters.setPriceTable(tab.value);
                                   } else if (filters.priceTable === tab.value) {
-                                    filters.setPriceTable(""); // Toggle off if clicking same
+                                    filters.setPriceTable(""); 
                                   }
                                 }}
                               />
-                              <Label htmlFor={`tab-${tab.value}`} className="font-normal cursor-pointer">
+                              <Label htmlFor={`tab-${tab.value}`} className="font-normal cursor-pointer text-sm">
                                 {tab.label}
                               </Label>
                             </div>
@@ -224,81 +343,12 @@ export function CatalogSidebar() {
                     </div>
                   </div>
 
-                  {/* Groups Filter */}
-                  <div className="space-y-2">
-                    <Label>Grupos</Label>
-                    <div className="border rounded-md p-2">
-                      <ScrollArea className="h-[150px]">
-                        <div className="space-y-2">
-                          {[
-                             { value: "10000", label: "Móveis" },
-                             { value: "20000", label: "Decoração" },
-                             { value: "30000", label: "Iluminação" },
-                             { value: "40000", label: "Cama, Mesa e Banho" },
-                             { value: "50000", label: "Utilidades Domésticas" },
-                          ].map((group) => (
-                            <div key={group.value} className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`group-${group.value}`}
-                                checked={filters.groups?.includes(group.value)}
-                                onCheckedChange={(checked) => {
-                                  const current = filters.groups || [];
-                                  if (checked) {
-                                     filters.setGroups([...current, group.value]);
-                                  } else {
-                                     filters.setGroups(current.filter(v => v !== group.value));
-                                  }
-                                }}
-                              />
-                              <Label htmlFor={`group-${group.value}`} className="font-normal cursor-pointer">
-                                {group.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </div>
-
-                   {/* Departments Filter */}
-                  <div className="space-y-2">
-                    <Label>Departamentos</Label>
-                    <div className="border rounded-md p-2">
-                      <ScrollArea className="h-[150px]">
-                        <div className="space-y-2">
-                          {[
-                             { value: "101000", label: "Sala de Estar" },
-                             { value: "102000", label: "Cozinha" },
-                             { value: "201000", label: "Vasos" },
-                             { value: "202000", label: "Quadros" },
-                             { value: "301000", label: "Luminárias" },
-                             { value: "401000", label: "Lençóis" },
-                          ].map((dept) => (
-                            <div key={dept.value} className="flex items-center space-x-2">
-                               <Checkbox 
-                                  id={`dept-${dept.value}`}
-                                  checked={filters.departments?.includes(dept.value)}
-                                  onCheckedChange={(checked) => {
-                                    const current = filters.departments || [];
-                                    if (checked) {
-                                       filters.setDepartments([...current, dept.value]);
-                                    } else {
-                                       filters.setDepartments(current.filter(v => v !== dept.value));
-                                    }
-                                  }}
-                               />
-                               <Label htmlFor={`dept-${dept.value}`} className="font-normal cursor-pointer">
-                                  {dept.label}
-                               </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </div>
+                  {renderCheckboxList("Segmento", segments, filters.segments || [], filters.setSegments)}
+                  {renderCheckboxList("Departamento", departments, filters.departments || [], filters.setDepartments)}
+                  {renderCheckboxList("Categoria", categories, filters.categories || [], filters.setCategories)}
 
                   <div className="space-y-2 flex flex-col pt-4 border-t">
-                    <Label>Validade (Opcional)</Label>
+                    <Label className="text-[12px] font-bold uppercase text-muted-foreground">Validade (Opcional)</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button

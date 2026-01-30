@@ -20,7 +20,7 @@ export function useCatalog() {
   const [showCest, setShowCest] = useQueryState("cest", parseAsBoolean.withDefault(true));
   const [showCover, setShowCover] = useQueryState("cover", parseAsBoolean.withDefault(true));
   
-  const [groups, setGroups] = useQueryState("groups", parseAsArrayOf(parseAsString).withDefault([]));
+  const [segments, setSegments] = useQueryState("segments", parseAsArrayOf(parseAsString).withDefault([]));
   const [departments, setDepartments] = useQueryState("depts", parseAsArrayOf(parseAsString).withDefault([]));
   const [categories, setCategories] = useQueryState("cats", parseAsArrayOf(parseAsString).withDefault([]));
   
@@ -45,7 +45,7 @@ export function useCatalog() {
          showStock,
          showCest,
          showCover,
-         groups,
+         segments,
          departments,
          categories,
          priceTable,
@@ -72,7 +72,7 @@ export function useCatalog() {
     } finally {
       setIsGenerating(false);
     }
-  }, [description, viewMode, date, showPrice, showBarcode, showStock, showCest, showCover, groups, departments, categories, priceTable, company, executeQuery]);
+  }, [description, viewMode, date, showPrice, showBarcode, showStock, showCest, showCover, segments, departments, categories, priceTable, company, executeQuery]);
 
   return {
     filters: {
@@ -84,7 +84,7 @@ export function useCatalog() {
       showStock, setShowStock,
       showCest, setShowCest,
       showCover, setShowCover,
-      groups, setGroups,
+      segments, setSegments,
       departments, setDepartments,
       categories, setCategories,
       priceTable, setPriceTable,

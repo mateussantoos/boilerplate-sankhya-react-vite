@@ -8,7 +8,7 @@ export const catalogFilterSchema = z.object({
   showStock: z.boolean().default(true),
   showCest: z.boolean().default(true),
   showCover: z.boolean().default(true),
-  groups: z.array(z.string()).default([]),
+  segments: z.array(z.string()).default([]),
   departments: z.array(z.string()).default([]),
   categories: z.array(z.string()).default([]),
   priceTable: z.string().optional(),

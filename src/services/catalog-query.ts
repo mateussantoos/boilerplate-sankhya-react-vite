@@ -5,8 +5,9 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
     description, 
     priceTable, 
     company, 
-    groups, 
-    departments, 
+    segments = [], 
+    departments = [], 
+    categories = [],
   } = filters;
 
   // Parameters
@@ -14,17 +15,17 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
   const P_DESCR = description ? `%${description.toUpperCase()}%` : null;
   
   // Multi-select handling
-  const companyList = company && company.length > 0 ? company.join(",") : "1,2,4"; // Default to all if empty
+  const companyList = company && company.length > 0 ? company.join(",") : "1,2,4";
   
   // Helper for IN clauses
   const buildInClause = (items: string[]) => {
     if (!items || items.length === 0) return "NULL";
-    // Sanitize and quote if necessary (assuming numeric IDs for groups/depts based on usage)
     return items.map(i => `'${i}'`).join(","); 
   };
 
-  const P_CODGRUPOPROD_LIST = buildInClause(groups);
-
+  const P_SEGMENTO_LIST = buildInClause(segments);
+  const P_DEPARTAMENTO_LIST = buildInClause(departments);
+  const P_CATEGORIA_LIST = buildInClause(categories);
 
   return `
     WITH 
@@ -79,7 +80,6 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
                 -- D: Caso contrário, zero.
                 ELSE 0 
             END AS PRECO_FINAL
-
         FROM TGFPRO P
         CROSS JOIN REGRAS_TABELAS R 
         LEFT JOIN PRECO_BASE_V1 V1 ON V1.CODPROD = P.CODPROD
@@ -101,6 +101,37 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
         WHERE S.CODEMP IN (1, 2, 4) -- Hardcoded allowed companies
           AND S.CODLOCAL IN (10100, 10400, 11200)
         GROUP BY S.CODPROD
+    ),
+
+    -- 5. HIERARQUIA DE CLASSIFICAÇÃO (User Logic)
+    DADOS_CLASSIFICACAO AS (
+        SELECT 
+            C1.CODPROD,
+            CLA.DESCRICAO,
+            ROW_NUMBER() OVER (
+                PARTITION BY C1.CODPROD 
+                ORDER BY 
+                    CASE 
+                        WHEN C1.CODCLASSIF = 555 THEN 1 
+                        WHEN C1.CODCLASSIF IN (530, 531, 532, 553, 554) THEN 2 
+                        WHEN C1.CODCLASSIF BETWEEN 533 AND 552 THEN 3 
+                        ELSE 4 
+                    END,
+                    C1.CODCLASSIF ASC
+            ) AS RN
+        FROM TGFCLP C1
+        JOIN TGFCLA CLA ON CLA.CODCLASSIF = C1.CODCLASSIF
+    ),
+
+    HIERARQUIA_PIVOT AS (
+        SELECT 
+            CODPROD,
+            MAX(CASE WHEN RN = 1 THEN DESCRICAO END) AS SEGMENTO,
+            MAX(CASE WHEN RN = 2 THEN DESCRICAO END) AS DEPARTAMENTO,
+            MAX(CASE WHEN RN = 3 THEN DESCRICAO END) AS CATEGORIA,
+            MAX(CASE WHEN RN = 4 THEN DESCRICAO END) AS SUBCATEGORIA
+        FROM DADOS_CLASSIFICACAO
+        GROUP BY CODPROD
     )
 
     SELECT
@@ -114,6 +145,12 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
         PRO.AD_ECOMMERCE,
         CAST(PRO.CARACTERISTICAS AS VARCHAR(MAX)) AS CARACTERISTICAS,
         PRO.IMAGEM,
+        
+        -- Classificações
+        HC.SEGMENTO,
+        HC.DEPARTAMENTO,
+        HC.CATEGORIA,
+        HC.SUBCATEGORIA,
 
         -- Seleciona o preço da tabela filtrada
         ISNULL((SELECT TOP 1 PRECO_FINAL FROM CALCULO_GERAL WHERE CODPROD = PRO.CODPROD AND CODTAB = ${P_TABPRECO}), 0) AS VLRVENDA,
@@ -126,27 +163,18 @@ export function buildCatalogQuery(filters: CatalogFilters): string {
 
     FROM TGFPRO PRO
     LEFT JOIN ESTOQUE_DISPONIVEL EST ON EST.CODPROD = PRO.CODPROD
+    LEFT JOIN HIERARQUIA_PIVOT HC ON HC.CODPROD = PRO.CODPROD
     WHERE PRO.ATIVO = 'S'
-      AND PRO.USOPROD IN ('R', 'V')
-      AND PRO.AD_ECOMMERCE = 'S' -- Mantendo filtro commerce
+      AND PRO.USOPROD = 'R'
+      AND PRO.AD_ECOMMERCE = 'S'
       
-      -- Filtros do Usuário
+      -- Filtro de Descrição
       AND (PRO.DESCRPROD LIKE '${P_DESCR}' OR ${P_DESCR === null ? '1=1' : '1=0'})
       
-      -- Filtro de Grupo (Recursivo removido por simplificação, usando IN direto se houver, ou ajustar para recursivo se necessário. O usuário pediu checkbox list, geralmente é nivel direto)
-      AND (
-          (${groups.length === 0 ? '1=1' : '1=0'}) OR
-          PRO.CODGRUPOPROD IN (${P_CODGRUPOPROD_LIST})
-      )
-      
-      -- Filtro de Departamento (Primeiros dígitos ou lógica específica? O usuário disse "Grupo e Departamento". Geralmente Sankhya é hierárquico. Vou assumir filtro direto pelo CODGRUPOPROD ou similar se for departamento separado)
-      -- Assumindo que Departamento também é via TGFGRU ou campo específico. O código original fazia LEFT(CODGRUPOPROD, 6). 
-      -- Vou manter a lógica original: se tiver departamento, filtra pelo prefixo. Mas como agora é lista... 
-      -- Se Departamento for uma lista de prefixos:
-      AND (
-          (${departments.length === 0 ? '1=1' : '1=0'}) OR
-          (${departments.length > 0 ? departments.map(d => `LEFT(PRO.CODGRUPOPROD, 6) = '${d}'`).join(' OR ') : '1=0'})
-      )
+      -- Filtros de Classificação
+      AND ((${segments.length === 0 ? '1=1' : '1=0'}) OR HC.SEGMENTO IN (${P_SEGMENTO_LIST}))
+      AND ((${departments.length === 0 ? '1=1' : '1=0'}) OR HC.DEPARTAMENTO IN (${P_DEPARTAMENTO_LIST}))
+      AND ((${categories.length === 0 ? '1=1' : '1=0'}) OR HC.CATEGORIA IN (${P_CATEGORIA_LIST}) OR HC.SUBCATEGORIA IN (${P_CATEGORIA_LIST}))
 
     ORDER BY PRO.DESCRPROD
   `;
