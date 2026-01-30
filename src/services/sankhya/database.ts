@@ -128,11 +128,16 @@ function _buildSavePayload(
  * executeQuery("SELECT NOMEUSU FROM TSIUSU WHERE CODUSU = 0")
  */
 export async function executeQuery(query: string) {
-  query = query.replace(/(\r\n|\n|\r)/gm, "");
+  // query = query.replace(/(\r\n|\n|\r)/gm, ""); // This was breaking queries with comments
 
   const url = `${window.location.origin}/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-  let payload: any = `{ "serviceName": "DbExplorerSP.executeQuery", "requestBody": { "sql": "${query}" } }`;
-  payload = JSON.parse(payload);
+  
+  const payload = {
+    serviceName: "DbExplorerSP.executeQuery",
+    requestBody: {
+      sql: query
+    }
+  };
 
   const request = await post(url, payload);
 
