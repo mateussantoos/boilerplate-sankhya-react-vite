@@ -126,7 +126,7 @@ export function CatalogPreview() {
       
       {products.length === 0 && (
          <div className="mt-10 w-full max-w-md">
-            <Alert variant="destructive">
+            <Alert variant="default">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Sem resultados</AlertTitle>
               <AlertDescription>
