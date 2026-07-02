@@ -88,9 +88,10 @@ function App() {
       return;
     }
 
-    // Execute the query to get products
+    // Execute the query to get products (parameterized with a typed bind value)
     const products = await sankhya.executeQuery(
-      "SELECT TOP 10 CODPROD, DESCRPROD FROM TGFPRO ORDER BY CODPROD ASC"
+      "SELECT TOP 10 CODPROD, DESCRPROD FROM TGFPRO WHERE CODPROD >= ? ORDER BY CODPROD ASC",
+      [{ value: 1, type: "I" }]
     );
     // Set the products in the local state
     setProducts(products);

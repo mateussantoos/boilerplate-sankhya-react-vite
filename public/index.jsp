@@ -10,6 +10,11 @@ import="br.com.sankhya.modelcore.auth.AuthenticationInfo" %>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>boilerplate-sankhya-react-vite</title>
 
+    <!-- Injects the native Sankhya dashboard runtime.
+         Provides the global helpers window.executeQuery / openApp / openLevel /
+         refreshDetails / openPage used by src/services/sankhya. -->
+    <snk:load />
+
     <!-- CSS Global -->
     <link rel="stylesheet" href="${BASE_FOLDER}/assets/index.css" />
   </head>

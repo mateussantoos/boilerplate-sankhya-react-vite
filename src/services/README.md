@@ -28,7 +28,10 @@ src/services/sankhya/
 
 ## Architectural Diagram
 
-This diagram shows the dependency flow. The `api.ts` module is the foundation, and all other modules depend on it to communicate with the Sankhya backend. The `index.ts` file bundles everything for easy consumption by the application.
+This diagram shows the dependency flow. Data and navigation modules (`database.ts`,
+`page.ts`) **prefer the native runtime** injected by `<snk:load/>` when it is
+present, and fall back to `api.ts` (`service.sbr`) otherwise. The `index.ts` file
+bundles everything for easy consumption by the application.
 
 ```mermaid
 flowchart TB
@@ -46,6 +49,7 @@ flowchart TB
   end
 
   subgraph SankhyaBackend ["Sankhya-W Backend"]
+    NR["Native runtime (window.executeQuery / openApp / ...)<br/>injected by &lt;snk:load/&gt;"]
     SBR["service.sbr endpoint"]
   end
 
@@ -61,7 +65,9 @@ flowchart TB
   P -->|uses| D
   U -->|uses| API
 
-  API -->|HTTP Requests| SBR
+  D -.->|prefers when available| NR
+  P -.->|prefers when available| NR
+  API -->|HTTP fallback| SBR
 ```
 
 ## Modules
@@ -158,22 +164,35 @@ This module handles all data-centric operations (CRUD, actions). It uses `api.ts
 
 #### Exported Functions
 
-##### `executeQuery(query)`
+##### `executeQuery(query, params)`
 
-Executes a SQL query using `DbExplorerSP.executeQuery`.
+Executes a SQL query with typed bind parameters.
+
+It prefers the **native `window.executeQuery`** helper injected by `<snk:load/>`
+(real server-side binding, officially supported). When that helper is not
+available (e.g. localhost dev or a deploy without `<snk:load/>`), it falls back
+to a direct `DbExplorerSP.executeQuery` call, binding each `?` placeholder
+client-side (escaped by type). Prefer `?` placeholders over string
+concatenation — the fallback escaping is defense-in-depth, not a full server bind.
 
 **Parameters:**
 
-- `query` (string): The SQL query string to execute.
+- `query` (string): The SQL query, using `?` placeholders for parameters.
+- `params` (SankhyaQueryParam[], optional): Typed bind values, in order. Each is
+  `{ value: string | number; type: "I" | "S" | "D" | "F" | "IN" | "L" }`.
 
 **Returns:** `Promise<any[]>` - A Promise with the query result (array of objects).
 
 **Example:**
 
 ```typescript
-// Simple query
+// Parameterized query (safe against SQL injection)
 const usuarios = await sankhyaService.executeQuery(
-  "SELECT NOMEUSU, CODUSU FROM TSIUSU WHERE ATIVO = 'S'"
+  "SELECT NOMEUSU, CODUSU FROM TSIUSU WHERE ATIVO = ? AND NOMEUSU LIKE ?",
+  [
+    { value: "S", type: "S" },
+    { value: "%O'Brien%", type: "S" },
+  ]
 );
 
 // Use the results

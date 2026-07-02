@@ -1,4 +1,5 @@
 import { post } from "./api";
+import type { SankhyaQueryParam } from "../../types/global";
 
 // --- Internal Helpers ---
 
@@ -117,22 +118,118 @@ function _buildSavePayload(
   return payload;
 }
 
+/**
+ * (INTERNAL) Quotes a value as a SQL string literal, escaping single quotes.
+ */
+function _escapeString(value: string | number): string {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+/**
+ * (INTERNAL) Replaces each `?` placeholder in a query with its typed, escaped
+ * value. This is a client-side defense used ONLY on the `service.sbr` fallback
+ * path (the native `executeQuery` does real server-side binding). It is not a
+ * substitute for true parameter binding, but prevents the raw string
+ * interpolation that broke on quotes and enabled SQL injection.
+ *
+ * @param {string} query - SQL with `?` placeholders.
+ * @param {SankhyaQueryParam[]} params - Typed bind values, in order.
+ * @returns {string} The query with placeholders replaced.
+ */
+function _bindParams(query: string, params: SankhyaQueryParam[]): string {
+  let index = 0;
+
+  return query.replace(/\?/g, () => {
+    const param = params[index++];
+
+    if (!param) {
+      throw new Error(
+        `[SankhyaService.executeQuery] Missing bind parameter #${index} for the query.`
+      );
+    }
+
+    const { value, type } = param;
+
+    switch (type) {
+      case "I":
+      case "F": {
+        const num = Number(value);
+        if (Number.isNaN(num)) {
+          throw new Error(
+            `[SankhyaService.executeQuery] Parameter #${index} of type "${type}" is not numeric: ${value}`
+          );
+        }
+        return String(num);
+      }
+      case "IN": {
+        // Comma-separated list: keep numeric items bare, quote the rest.
+        return String(value)
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+          .map((item) =>
+            Number.isNaN(Number(item)) ? _escapeString(item) : item
+          )
+          .join(", ");
+      }
+      // "S" (string), "D" (date) and "L" (logical) are quoted + escaped.
+      default:
+        return _escapeString(value);
+    }
+  });
+}
+
 // --- Exported Functions ---
 
 /**
- * Executes a query on the database service (DbExplorerSP.executeQuery).
+ * Executes a SQL query.
  *
- * @param {string} query - The SQL query string to execute.
+ * Prefers the native `window.executeQuery` helper injected by `<snk:load/>`
+ * (parameterized and safe). When it is not available (e.g. localhost dev or a
+ * deploy without `<snk:load/>`), it falls back to a direct
+ * `DbExplorerSP.executeQuery` call, binding `?` placeholders client-side.
+ *
+ * @param {string} query - The SQL query, using `?` placeholders for parameters.
+ * @param {SankhyaQueryParam[]} [params] - Typed bind values, in order.
  * @returns {Promise<any[]>} A Promise with the query result (array of objects).
  * @example
- * executeQuery("SELECT NOMEUSU FROM TSIUSU WHERE CODUSU = 0")
+ * executeQuery(
+ *   "SELECT NOMEUSU FROM TSIUSU WHERE CODUSU = ?",
+ *   [{ value: 0, type: "I" }]
+ * )
  */
-export async function executeQuery(query: string) {
-  query = query.replace(/(\r\n|\n|\r)/gm, "");
+export async function executeQuery(
+  query: string,
+  params: SankhyaQueryParam[] = []
+): Promise<any[]> {
+  query = query.replace(/(\r\n|\n|\r)/gm, " ");
+
+  // Primary path: native runtime injected by <snk:load/> (server-side binding).
+  if (typeof window.executeQuery === "function") {
+    return new Promise<any[]>((resolve, reject) => {
+      window.executeQuery!(
+        query,
+        params,
+        (value) => {
+          try {
+            resolve(value ? JSON.parse(value) : []);
+          } catch (e) {
+            reject(e);
+          }
+        },
+        (error) => reject(error)
+      );
+    });
+  }
+
+  // Fallback path: direct service.sbr call with client-side bound placeholders.
+  const boundQuery = _bindParams(query, params);
 
   const url = `${window.location.origin}/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-  let payload: any = `{ "serviceName": "DbExplorerSP.executeQuery", "requestBody": { "sql": "${query}" } }`;
-  payload = JSON.parse(payload);
+  const payload = {
+    serviceName: "DbExplorerSP.executeQuery",
+    requestBody: { sql: boundQuery },
+  };
 
   const request = await post(url, payload);
 

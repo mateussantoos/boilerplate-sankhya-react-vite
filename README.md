@@ -91,6 +91,10 @@ vite.config.ts       # Build config (stable outputs, base "./", zip pack)
 
 ## Sankhya Notes
 
+- `public/index.jsp` calls `<snk:load/>`, which injects Sankhya's native runtime
+  (`window.executeQuery`, `openApp`, `openLevel`, `refreshDetails`, `openPage`).
+  The service layer prefers these native helpers and only falls back to direct
+  `service.sbr` calls when they are absent (e.g. localhost dev).
 - Assets use relative URLs (`base: "./"`) so `${BASE_FOLDER}` works in JSP.
 - Small images are not inlined (`assetsInlineLimit: 0`) so they exist as physical files in `dist/assets`.
 - If your Sankhya environment doesn’t support `<script type="module">`, add `@vitejs/plugin-legacy` and load the legacy bundle in `index.jsp`.

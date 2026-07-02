@@ -1,108 +1,141 @@
 // src/services/sankhya/page.ts
 import { executeQuery } from "./database";
 
+/** Query-string flag added to the injected iframe URL to prevent re-framing loops. */
+const NOFRAME_FLAG = "_noframe";
+
 /**
  * Interface for removeFrame options.
  */
 interface RemoveFrameOptions {
+  /** Gadget title (TSIGDG.TITULO). Used only as a last-resort fallback. */
   instance: string;
+  /** Entry JSP. Default: entryPoint from the current URL, else "index.jsp". */
   initialPage: string;
+  /** Gadget ID (NUGDG). Pass it directly to skip all resolution. */
+  nuGdg: number | string;
   [key: string]: any;
 }
 
+/** Safely reads a query-string parameter from the current URL. */
+function getUrlParam(name: string): string | null {
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch {
+    return null;
+  }
+}
+
+/** Hides the GWT alert popup and locks body scroll on a document. */
+function hidePopupAndLockScroll(doc: Document) {
+  if (!doc.getElementsByTagName("body").length) return;
+
+  const popup = doc.querySelector(
+    "div.gwt-PopupPanel.alert-box.box-shadow"
+  ) as HTMLElement | null;
+  if (popup) popup.style.display = "none";
+
+  (doc.getElementsByTagName("body")[0] as HTMLElement).style.overflow = "hidden";
+}
+
 /**
- * Removes the frame from a BI (HTML5) page.
+ * Resolves the NUGDG: explicit → current URL → TSIGDG by title. Returns 0 on failure.
+ */
+async function resolveNuGdg(
+  explicit?: number | string,
+  instance?: string
+): Promise<number> {
+  const fromExplicit = Number(explicit);
+  if (fromExplicit > 0) return fromExplicit;
+
+  const fromUrl = Number(getUrlParam("nuGdg"));
+  if (fromUrl > 0) return fromUrl;
+
+  if (instance && instance.length > 0) {
+    try {
+      const rows = await executeQuery(
+        "SELECT NUGDG FROM TSIGDG WHERE TITULO = ?",
+        [{ value: instance, type: "S" }]
+      );
+      const n = Number(rows?.[0]?.NUGDG);
+      if (n > 0) return n;
+    } catch {
+      /* ignore and fall through to 0 */
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Removes the frame from a BI (HTML5) gadget, making the component full-screen.
+ *
+ * Resolves the gadget ID (NUGDG) from the current URL (where Sankhya already
+ * provides it), avoiding the fragile GWT selector and the HTTP 500 caused by an
+ * invalid `nuGdg=0`. Guards against re-framing loops and is a no-op outside of a
+ * Sankhya dashboard.
  *
  * @param {RemoveFrameOptions} [options] - Configuration options.
- * @param {string} [options.instance] - The exact name of the BI component.
- * @param {string} [options.initialPage] - The URL of the initial page (e.g., "app.jsp").
- * @param {any} [options.otherOptions] - Additional fields to be passed as URL parameters.
+ * @param {string} [options.instance] - Gadget title (TSIGDG.TITULO), fallback only.
+ * @param {string} [options.initialPage] - The entry JSP (e.g., "app.jsp").
+ * @param {number|string} [options.nuGdg] - Gadget ID; pass it to skip resolution.
  */
-export function removeFrame(
-  { instance, initialPage, ...otherOptions }: Partial<RemoveFrameOptions> = {
-    instance: "",
-    initialPage: "index.jsp",
-  }
-) {
-  new Promise<{ gadGetID: string; nuGdt: number; [key: string]: any }>(
-    (resolve) => {
-      // Hide popups and fix overflow on parent
-      if (window.parent.document.getElementsByTagName("body").length) {
-        const parentPopup = window.parent.document.querySelector(
-          "div.gwt-PopupPanel.alert-box.box-shadow"
-        ) as HTMLElement;
-        if (parentPopup) parentPopup.style.display = "none";
-        (
-          window.parent.document.getElementsByTagName("body")[0] as HTMLElement
-        ).style.overflow = "hidden";
-      }
+export async function removeFrame({
+  instance = "",
+  initialPage,
+  nuGdg,
+  ...otherOptions
+}: Partial<RemoveFrameOptions> = {}): Promise<void> {
+  // Already full-screen (we are the injected iframe): do nothing.
+  if (getUrlParam(NOFRAME_FLAG)) return;
 
-      // Hide popups and fix overflow on grandparent
-      if (window.parent.parent.document.getElementsByTagName("body").length) {
-        const grandParentPopup = window.parent.parent.document.querySelector(
-          "div.gwt-PopupPanel.alert-box.box-shadow"
-        ) as HTMLElement;
-        if (grandParentPopup) grandParentPopup.style.display = "none";
-        (
-          window.parent.parent.document.getElementsByTagName(
-            "body"
-          )[0] as HTMLElement
-        ).style.overflow = "hidden";
-      }
-
-      // Try to find instance name automatically
-      const instanceElement = window.parent.document.querySelector(
-        "div.GI-BUHVBPVC > div > div > div > div > div > table > tbody > tr > td > div"
-      );
-      if (instanceElement) {
-        instance = instanceElement.textContent || instance;
-      }
-
-      // Query for the component ID
-      if (instance && instance.length > 0) {
-        executeQuery(`SELECT NUGDG FROM TSIGDG WHERE TITULO = '${instance}'`)
-          .then((e: any) =>
-            resolve({
-              gadGetID: "html5_z6dld",
-              nuGdt: e[0].NUGDG,
-              ...otherOptions,
-            })
-          )
-          .catch(() =>
-            resolve({ gadGetID: "html5_z6dld", nuGdt: 0, ...otherOptions })
-          );
-      } else {
-        resolve({ gadGetID: "html5_z6dld", nuGdt: 0, ...otherOptions });
-      }
+  let parentDoc: Document;
+  let grandParentDoc: Document | null = null;
+  try {
+    parentDoc = window.parent.document;
+    try {
+      grandParentDoc = window.parent.parent.document;
+    } catch {
+      grandParentDoc = null;
     }
-  ).then((o) =>
-    setTimeout(() => {
-      if (
-        typeof window.parent.document.getElementsByClassName("DashWindow")[0] !=
-        "undefined"
-      ) {
-        const urlOptions = Object.keys(o)
-          .filter(
-            (item) =>
-              !["params", "UID", "instance", "nuGdg", "gadGetID"].includes(item)
-          )
-          .map((item) => `&${item}=${o[item]}`)
-          .join("");
+  } catch {
+    // Cross-origin or not embedded — nothing to remove.
+    return;
+  }
 
-        const url = `/mge/html5component.mge?entryPoint=${initialPage}&nuGdg=${o.nuGdt}${urlOptions}`;
+  // Only act inside a Sankhya dashboard gadget.
+  const dashWindow = parentDoc.getElementsByClassName("DashWindow")[0];
+  const dynaGadget = parentDoc.getElementsByClassName("dyna-gadget")[0];
+  if (!dashWindow || !dynaGadget) return;
 
-        setTimeout(
-          () =>
-            (window.parent.document.getElementsByClassName(
-              "dyna-gadget"
-            )[0].innerHTML = `<iframe src="${url}" class="gwt-Frame" style="width: 100%; height: 100%;"></iframe>`),
-          500
-        );
+  hidePopupAndLockScroll(parentDoc);
+  if (grandParentDoc) hidePopupAndLockScroll(grandParentDoc);
 
-        // ... (Cleanup timeouts kept from original)
-      }
-    })
-  );
+  const resolvedNuGdg = await resolveNuGdg(nuGdg, instance);
+  const entryPoint = initialPage || getUrlParam("entryPoint") || "index.jsp";
+
+  // GUARD: an invalid nuGdg is exactly what makes html5component.mge return 500.
+  if (!resolvedNuGdg) {
+    console.warn(
+      "[removeFrame] NUGDG not resolved — frame kept to avoid a 500. " +
+        "Pass { nuGdg } or { instance } (= TSIGDG.TITULO)."
+    );
+    return;
+  }
+
+  const extraParams = Object.keys(otherOptions)
+    .filter(
+      (k) => !["params", "UID", "instance", "nuGdg", "gadGetID"].includes(k)
+    )
+    .map((k) => `&${k}=${encodeURIComponent(otherOptions[k])}`)
+    .join("");
+
+  const url = `/mge/html5component.mge?entryPoint=${entryPoint}&nuGdg=${resolvedNuGdg}&${NOFRAME_FLAG}=1${extraParams}`;
+
+  // Replace the gadget content with a full-screen iframe of the same component.
+  setTimeout(() => {
+    dynaGadget.innerHTML = `<iframe src="${url}" class="gwt-Frame" style="width: 100%; height: 100%; border: 0;"></iframe>`;
+  }, 500);
 }
 
 /**
@@ -152,6 +185,72 @@ export function openAppPage(
     target: "_top", // Navigates the top-level window
     href: url,
   }).click();
+}
+
+/**
+ * Opens another screen inside Sankhya-W using the native `openApp` helper
+ * (injected by `<snk:load/>`). Falls back to `openAppPage` when the native
+ * helper is not available.
+ *
+ * @param {string} resourceID - The resource ID of the screen to open.
+ * @param {Record<string, unknown>} [params] - Parameters/primary keys for the screen.
+ */
+export function openApp(resourceID: string, params?: Record<string, unknown>) {
+  if (typeof window.openApp === "function") {
+    return window.openApp(resourceID, params);
+  }
+  return openAppPage(resourceID, params);
+}
+
+/**
+ * Opens another level inside the dashboard using the native `openLevel` helper.
+ * Requires the Sankhya native runtime (`<snk:load/>`).
+ *
+ * @param {string} level - The target level.
+ * @param {Record<string, unknown>} [params] - Parameters for the level.
+ */
+export function openLevel(level: string, params?: Record<string, unknown>) {
+  if (typeof window.openLevel === "function") {
+    return window.openLevel(level, params);
+  }
+  console.warn(
+    "[SankhyaService.openLevel] requires the Sankhya native runtime (<snk:load/>)."
+  );
+}
+
+/**
+ * Refreshes a detail component using the native `refreshDetails` helper.
+ * Requires the Sankhya native runtime (`<snk:load/>`).
+ *
+ * @param {string} componentID - The detail component ID.
+ * @param {Record<string, unknown>} [params] - Parameters for the refresh.
+ */
+export function refreshDetails(
+  componentID: string,
+  params?: Record<string, unknown>
+) {
+  if (typeof window.refreshDetails === "function") {
+    return window.refreshDetails(componentID, params);
+  }
+  console.warn(
+    "[SankhyaService.refreshDetails] requires the Sankhya native runtime (<snk:load/>)."
+  );
+}
+
+/**
+ * Opens an external page using the native `openPage` helper.
+ * Requires the Sankhya native runtime (`<snk:load/>`).
+ *
+ * @param {string} page - The page URL to open.
+ * @param {Record<string, unknown>} [params] - Parameters for the page.
+ */
+export function openPage(page: string, params?: Record<string, unknown>) {
+  if (typeof window.openPage === "function") {
+    return window.openPage(page, params);
+  }
+  console.warn(
+    "[SankhyaService.openPage] requires the Sankhya native runtime (<snk:load/>)."
+  );
 }
 
 /**
