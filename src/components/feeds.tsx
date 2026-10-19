@@ -50,6 +50,7 @@ const ACTIVITY_ICON: Record<Activity["kind"], { icon: LucideIcon; color: string 
   quoteError: { icon: CircleAlert, color: "bg-[#f9e3e3] text-status-critical" },
   shipment: { icon: Send, color: "bg-snk-green-soft text-snk-green-dark" },
   refused: { icon: Ban, color: "bg-[#f9e3e3] text-status-critical" },
+  cancelled: { icon: Ban, color: "bg-[#ececec] text-[#555]" },
   tracking: { icon: Truck, color: "bg-[#fdf1dc] text-[#b26a00]" },
 };
 

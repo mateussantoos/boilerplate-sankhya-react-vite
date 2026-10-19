@@ -67,7 +67,10 @@ export interface Shipment {
   when: Date | null;
   user: string | null;
   environment: Environment | null;
+  /** Envio criado na transportadora e ativo (STATUS = OK). */
   ok: boolean;
+  /** Envio cancelado na transportadora pela central ou pelo pop-up (STATUS = CANC). */
+  cancelled: boolean;
   customerNumber: string | null;
   carrierOrder: string | null;
   waybills: string[];
@@ -221,6 +224,12 @@ export interface TrackingReply {
   ok: boolean;
   message: string | null;
   boxes: BoxTracking[];
+}
+
+/** Resposta de uma ação do botão do módulo (ex.: cancelar envio). */
+export interface ActionReply {
+  ok: boolean;
+  message: string | null;
 }
 
 export interface QuoteReply {

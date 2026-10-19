@@ -2,7 +2,7 @@
   "name": "brasfoot-sankhya-transportadora-html5",
   "description": "Central de Fretes: componente de BI HTML5 do Sankhya com cotações, envios, rastreio e transportadoras do módulo de frete da Brasfoot",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "author": "Mateus Santos",
   "license": "MIT",

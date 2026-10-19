@@ -12,13 +12,15 @@ import type { Shipment } from "@/services/freight/types";
 export function ShipmentsPage() {
   const { view, openOrder } = useCentral();
   const [search, setSearch] = useState("");
-  const [result, setResult] = useState<"ok" | "refused" | "all">("ok");
+  const [result, setResult] = useState<"ok" | "cancelled" | "refused" | "all">("ok");
 
   const rows = useMemo(() => view?.shipments ?? [], [view]);
   const okCount = rows.filter((s) => s.ok).length;
+  const cancelledCount = rows.filter((s) => s.cancelled).length;
+  const refusedCount = rows.length - okCount - cancelledCount;
   const filtered = rows.filter(
     (s) =>
-      (result === "all" || (result === "ok" ? s.ok : !s.ok)) &&
+      (result === "all" || (result === "ok" ? s.ok : result === "cancelled" ? s.cancelled : !s.ok && !s.cancelled)) &&
       matches(search, s.invoiceNumber, s.carrierOrder, s.customer, s.city, s.state, s.customerNumber, s.orderId, s.invoiceId, ...s.waybills)
   );
 
@@ -93,10 +95,10 @@ export function ShipmentsPage() {
       key: "status",
       header: "Situação",
       render: (s) =>
-        s.ok ? (
+        s.ok || s.cancelled ? (
           <div className="max-w-[260px] leading-tight">
             <StatusBadge status={shipmentStatus(s)} />
-            <div className="mt-1 truncate text-xs text-muted" title={s.situation ?? undefined}>
+            <div className="mt-1 truncate text-xs text-muted" title={s.cancelled ? s.message ?? undefined : s.situation ?? undefined}>
               {s.situation ?? "Envio solicitado"} · {fmtAgo(s.situationWhen ?? s.when)}
             </div>
           </div>
@@ -112,7 +114,8 @@ export function ShipmentsPage() {
         const st = shipmentStatus(s);
         return st ? STATUS_ORDER.indexOf(st) : 99;
       },
-      csv: (s) => (s.ok ? `${STATUS_LABEL[shipmentStatus(s) ?? "S"]} - ${s.situation ?? ""}` : `Recusado - ${s.message ?? ""}`),
+      csv: (s) =>
+        s.ok || s.cancelled ? `${STATUS_LABEL[shipmentStatus(s) ?? "S"]} - ${s.situation ?? ""}` : `Recusado - ${s.message ?? ""}`,
     },
     {
       key: "age",
@@ -141,7 +144,8 @@ export function ShipmentsPage() {
               value={result}
               options={[
                 { value: "ok", label: "Solicitados", count: okCount },
-                { value: "refused", label: "Recusados", count: rows.length - okCount },
+                { value: "cancelled", label: "Cancelados", count: cancelledCount },
+                { value: "refused", label: "Recusados", count: refusedCount },
                 { value: "all", label: "Todos", count: rows.length },
               ]}
               onChange={setResult}

@@ -65,7 +65,7 @@ export function OverviewPage() {
           icon={Send}
           accent="green"
           value={fmtNumber(k.shipments)}
-          hint={`${fmtNumber(k.boxesShipped)} caixas · ${fmtDecimal(k.weightShipped, 0)} kg${k.refused ? ` · ${k.refused} recusado(s)` : ""}`}
+          hint={`${fmtNumber(k.boxesShipped)} caixas · ${fmtDecimal(k.weightShipped, 0)} kg${k.refused ? ` · ${k.refused} recusado(s)` : ""}${k.cancelled ? ` · ${k.cancelled} cancelado(s)` : ""}`}
           onClick={() => go("shipments")}
         />
         <Stat

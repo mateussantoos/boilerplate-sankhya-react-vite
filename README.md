@@ -53,7 +53,7 @@ Pedidos e notas cotados ou enviados, com:
 
 ### Envios
 
-Envios solicitados e recusados:
+Envios solicitados, cancelados e recusados:
 - NF-e, pedido na transportadora, caixas, peso e frete;
 - situação e dias desde o envio.
 
@@ -99,6 +99,9 @@ Clique em qualquer linha para abrir o painel lateral. Ele tem cinco abas:
 - **Trajeto:** consulta a transportadora na hora. Para cada caixa mostra os marcos (solicitado → coletado → em trânsito → agência → saiu para entrega → entregue) e os eventos com data, local e motivo de falha. Caixas com o mesmo trajeto aparecem juntas.
 - **Cotações:** histórico do pedido, o JSON de cada cotação e **Recotar com as mesmas caixas** (enquanto não há envio).
 - **Envio:** pedido na transportadora, referência, NF-e, os códigos de rastreio e a **etiqueta (PDF) de cada caixa**.
+  Enquanto a situação é "Envio solicitado", **Cancelar envio** (com confirmação) cancela todas as caixas na
+  transportadora pelo botão do módulo; a Anjun só aceita antes da coleta. O envio cancelado mostra quando e por
+  quem, e as etiquetas dele deixam de ser oferecidas.
 - **Itens:** produtos do pedido.
 
 O botão **Abrir no Sankhya** abre a Central de Notas no registro.
@@ -114,7 +117,7 @@ Atalho: `index.jsp?nunota=776934&aba=route` abre a central já no pedido. As aba
 | `AD_FRETECAIXA` | Caixas padrão da expedição |
 | `TGFCAB` (`AD_FRETE*`) | Situação do frete gravada no pedido e na nota |
 | `TGFPAR`, `TSICID`, `TSIUFS`, `TSIEND`, `TSIBAI`, `TSIEMP`, `TGFITE`, `TGFPRO`, `TGFVEN`, `TSIUSU` | Cliente, cidade/UF, endereços, itens, vendedor e usuários |
-| Botão **Cotar frete** (`ACAO=RASTREAR`, `ACAO=COTAR`) | Trajeto ao vivo de cada caixa e nova cotação |
+| Botão **Cotar frete** (`ACAO=RASTREAR`, `ACAO=COTAR`, `ACAO=CANCELAR`) | Trajeto ao vivo de cada caixa, nova cotação e cancelamento do envio |
 
 Como cada parte funciona:
 
@@ -190,6 +193,7 @@ Estes pontos só dão para validar dentro do Sankhya:
 
 | Versão | Mudanças |
 |---|---|
+| 1.1.0 | **Cancelar envio** no detalhe do pedido (aba Envio), pelo botão do módulo (`ACAO=CANCELAR`, módulo 2.4.0 ou mais novo), só antes da coleta e com confirmação. Envios cancelados (`STATUS = CANC`) aparecem como "Envio cancelado", com filtro próprio na tela Envios, e não contam como recusados nem como pendência |
 | 1.0.0 | Primeira versão: visão geral, pendências, pedidos, envios, rastreamento (com atualização em lote), cotações (com JSON), transportadoras, caixas e configurações; detalhe do pedido com trajeto ao vivo, recotar, etiquetas e itens; dados de exemplo para desenvolvimento |
 
 ---

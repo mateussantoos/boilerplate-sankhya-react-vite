@@ -21,7 +21,7 @@ import { fmtDate, fmtDateTime, fmtDays, fmtDecimal, fmtKg, fmtM3, fmtMoney, fmtN
 import type { BoxType, OrderDetail, Quote, TrackingReply } from "@/services/freight/types";
 import { JsonViewer } from "./json-viewer";
 import { Milestones, RouteHeader, Timeline, groupBoxes } from "./route-view";
-import { Alert, Badge, EnvBadge, Empty, Field, Spinner, StatusBadge, Tabs, cx } from "./ui";
+import { Alert, Badge, EnvBadge, Empty, Field, Modal, Spinner, StatusBadge, Tabs, cx } from "./ui";
 
 /** Tela do pedido no Sankhya (Central de Notas), aberta com a chave NUNOTA. */
 const ORDER_SCREEN = "br.com.sankhya.com.mov.CentralNotas";
@@ -34,6 +34,8 @@ export function OrderDrawer() {
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [json, setJson] = useState<{ kind: "quote" | "shipment"; id: number } | null>(null);
   const [requoting, setRequoting] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<OrderDetail["shipments"][number] | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const orderId = drawer?.orderId ?? null;
   const tab = drawer?.tab ?? "summary";
@@ -85,6 +87,21 @@ export function OrderDrawer() {
   if (!orderId) return null;
   const o = detail?.order;
   const status = (o && view?.statusByOrder.get(o.id)) ?? o?.status ?? (shipment ? shipmentStatus(shipment) : null);
+
+  /* Cancelamento pelo botão do módulo (ACAO=CANCELAR): a Anjun só aceita antes da coleta. */
+  const cancelShipment = async () => {
+    setCancelTarget(null);
+    setCancelling(true);
+    try {
+      const r = await source.cancel(orderId);
+      notify(r.ok ? "success" : "error", r.message || (r.ok ? "Envio cancelado." : "O cancelamento falhou."));
+      if (r.ok) {
+        reload();
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const requote = async (q: Quote) => {
     if (!q.carrierId || !q.boxes || !q.weightKg) return;
@@ -169,11 +186,44 @@ export function OrderDrawer() {
           {detail && tab === "quotes" && (
             <QuotesTab detail={detail} boxes={data?.boxes ?? []} onJson={(id) => setJson({ kind: "quote", id })} onRequote={requote} requoting={requoting} />
           )}
-          {detail && tab === "shipment" && <ShipmentTab detail={detail} boxes={data?.boxes ?? []} onJson={(id) => setJson({ kind: "shipment", id })} notify={notify} />}
+          {detail && tab === "shipment" && (
+            <ShipmentTab
+              detail={detail}
+              boxes={data?.boxes ?? []}
+              onJson={(id) => setJson({ kind: "shipment", id })}
+              notify={notify}
+              onCancel={setCancelTarget}
+              cancelling={cancelling}
+            />
+          )}
           {detail && tab === "items" && <ItemsTab detail={detail} />}
         </div>
       </aside>
       {json && <JsonViewer kind={json.kind} id={json.id} onClose={() => setJson(null)} />}
+      {cancelTarget && (
+        <Modal title="Cancelar envio" onClose={() => setCancelTarget(null)} width={520}>
+          <p className="m-0 text-[13px] leading-relaxed">
+            O envio <b>{cancelTarget.carrierOrder ?? cancelTarget.customerNumber}</b> da NF-e{" "}
+            <b>
+              {cancelTarget.invoiceNumber ?? "—"}
+              {cancelTarget.invoiceSeries ? `/${cancelTarget.invoiceSeries}` : ""}
+            </b>{" "}
+            ({cancelTarget.waybills.length} etiqueta(s)) será cancelado na {shortName(cancelTarget.carrierName)}.
+          </p>
+          <Alert kind="warning" className="mt-3">
+            Só é possível <b>antes da coleta</b>; depois dela, fale com a transportadora. As etiquetas impressas deixam de valer e o
+            pedido volta a poder ser cotado e enviado.
+          </Alert>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" className="btn btn-outline" onClick={() => setCancelTarget(null)}>
+              Voltar
+            </button>
+            <button type="button" className="btn btn-danger" onClick={cancelShipment}>
+              <X size={14} /> Confirmar cancelamento
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -282,6 +332,15 @@ function RouteTab({
   const shipment = detail.shipments.find((s) => s.ok);
   const groups = useMemo(() => (tracking ? groupBoxes(tracking.reply.boxes) : []), [tracking]);
   if (!hasShipment) {
+    const cancelled = detail.shipments.find((s) => s.cancelled);
+    if (cancelled) {
+      return (
+        <Empty icon={Route} title="Envio cancelado">
+          {cancelNote(cancelled.message) ?? `O envio ${cancelled.carrierOrder ?? ""} foi cancelado.`} O pedido pode ser cotado e
+          enviado de novo pelo pop-up Cotar frete.
+        </Empty>
+      );
+    }
     return (
       <Empty icon={Route} title="Ainda sem envio">
         O trajeto aparece depois que o envio é solicitado no pop-up Cotar frete (Solicitar envio).
@@ -441,16 +500,26 @@ function QuotesTab({
 
 /* ------------------------------------------------------------------ envio */
 
+/** "… | Cancelado na transportadora em 19/10/2026 10:30 por MATEUS" → o trecho do cancelamento. */
+function cancelNote(message: string | null): string | null {
+  const m = /Cancelado na transportadora em .*$/.exec(message ?? "");
+  return m ? m[0] : null;
+}
+
 function ShipmentTab({
   detail,
   boxes,
   onJson,
   notify,
+  onCancel,
+  cancelling,
 }: {
   detail: OrderDetail;
   boxes: BoxType[];
   onJson: (id: number) => void;
   notify: (kind: "success" | "error" | "info", text: string) => void;
+  onCancel: (s: OrderDetail["shipments"][number]) => void;
+  cancelling: boolean;
 }) {
   if (!detail.shipments.length) {
     return (
@@ -474,11 +543,27 @@ function ShipmentTab({
             </h3>
             <div className="flex items-center gap-1.5">
               <EnvBadge env={s.environment} />
-              {s.ok ? <StatusBadge status={shipmentStatus(s)} /> : <Badge tone="red">Recusado</Badge>}
+              {s.ok || s.cancelled ? <StatusBadge status={shipmentStatus(s)} /> : <Badge tone="red">Recusado</Badge>}
             </div>
           </header>
           <div className="p-4">
-            {!s.ok && (
+            {s.cancelled && (
+              <Alert kind="info" className="mb-3">
+                <b>Envio cancelado.</b> {cancelNote(s.message) ? `${cancelNote(s.message)}.` : `Cancelado em ${fmtDateTime(s.situationWhen)}.`} As etiquetas
+                deste envio não valem mais.
+              </Alert>
+            )}
+            {s.ok && shipmentStatus(s) === "S" && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-[3px] border border-line bg-[#fafafa] px-3 py-2.5">
+                <span className="text-[13px] text-[#555]">
+                  Solicitado por engano? Dá para cancelar na transportadora <b>antes da coleta</b>.
+                </span>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => onCancel(s)} disabled={cancelling}>
+                  {cancelling ? <Spinner size={13} /> : <X size={13} />} Cancelar envio
+                </button>
+              </div>
+            )}
+            {!s.ok && !s.cancelled && (
               <Alert kind="error" className="mb-3">
                 {s.message ?? "A transportadora recusou o envio."}
                 {s.httpStatus ? ` (HTTP ${s.httpStatus})` : ""}
@@ -521,7 +606,9 @@ function ShipmentTab({
                         <span className="text-xs text-muted">Caixa {i + 1}</span>
                         <span className="block truncate font-mono text-xs">{w}</span>
                       </span>
-                      {s.labels[i] ? (
+                      {s.cancelled ? (
+                        <span className="text-xs text-muted">cancelada</span>
+                      ) : s.labels[i] ? (
                         <a className="btn btn-ghost btn-sm" href={s.labels[i]} target="_blank" rel="noopener noreferrer" title="Abrir a etiqueta (PDF)">
                           <FileText size={13} /> Etiqueta
                         </a>

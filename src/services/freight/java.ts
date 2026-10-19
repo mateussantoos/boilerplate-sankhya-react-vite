@@ -1,7 +1,7 @@
 import { getCookie } from "@/services/sankhya/utils";
 import { num, text } from "./format";
 import { asStatus } from "./status";
-import type { BoxTracking, QuoteReply, TrackingReply } from "./types";
+import type { ActionReply, BoxTracking, QuoteReply, TrackingReply } from "./types";
 
 /**
  * Chamadas ao botão "Cotar frete" do módulo (Rotina Java FreightQuoteAction), do mesmo jeito que o
@@ -121,6 +121,11 @@ export function toTracking(reply: any, orderId: number): TrackingReply {
     message: text(reply?.message) || text(reply?.error),
     boxes,
   };
+}
+
+/** Resposta de uma ação sem dado próprio (CANCELAR): sucesso e a mensagem do módulo. */
+export function toActionReply(reply: any): ActionReply {
+  return { ok: !!reply?.ok, message: text(reply?.message) || text(reply?.error) };
 }
 
 /** Resposta do COTAR → resultado da nova cotação. */

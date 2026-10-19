@@ -1,10 +1,11 @@
 import { sankhyaService } from "@/services/sankhya";
 import type { SankhyaQueryParam } from "@/types/global";
 import { num, text } from "./format";
-import { callButton, toQuoteReply, toTracking } from "./java";
+import { callButton, toActionReply, toQuoteReply, toTracking } from "./java";
 import { toBox, toCarrier, toOrder, toQuote, toShipment, type Row } from "./rows";
 import * as SQL from "./sql";
 import type {
+  ActionReply,
   Address,
   Dataset,
   Filters,
@@ -28,6 +29,8 @@ export interface FreightSource {
   track(orderId: number): Promise<TrackingReply>;
   /** Nova cotação com as mesmas caixas e o mesmo peso de uma cotação anterior. */
   requote(orderId: number, carrierId: number, boxes: string, weightKg: number): Promise<QuoteReply>;
+  /** Cancela na transportadora o envio ativo do registro (só antes da coleta). */
+  cancel(orderId: number): Promise<ActionReply>;
   /** Id do botão "Cotar frete" (TSIBTA); null quando não encontrado. */
   buttonId(): Promise<number | null>;
 }
@@ -217,6 +220,15 @@ export const sankhyaSource: FreightSource = {
       );
     } catch (e) {
       return { ok: false, message: describe(e), fee: null, days: null, chargedWeightKg: null };
+    }
+  },
+
+  async cancel(orderId) {
+    try {
+      const id = await requireButton();
+      return toActionReply(await callButton(id, `0|ACAO=CANCELAR|NUNOTA=${orderId}`, orderId));
+    } catch (e) {
+      return { ok: false, message: describe(e) };
     }
   },
 };

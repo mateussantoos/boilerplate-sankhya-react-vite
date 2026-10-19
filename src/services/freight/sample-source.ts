@@ -297,6 +297,7 @@ function build(): SampleWorld {
         user,
         environment: "S",
         ok: !refused,
+        cancelled: false,
         customerNumber: `BF${id + 400000}`,
         carrierOrder: refused ? null : `ANJ${String(5200000 + i * 13)}`,
         waybills,
@@ -321,7 +322,10 @@ function build(): SampleWorld {
         status: refused ? "C" : status,
       };
       shipments.push(shipment);
-      if (!refused) {
+      /* Alguns cancelados pela expedição logo depois de pedir (solicitado por engano). */
+      if (!refused && r() < 0.05) {
+        markCancelled(shipment, order, new Date(sent.getTime() + between(1, 6) * 3600000), user);
+      } else if (!refused) {
         order.status = status;
         order.tracking = waybills.join(", ").slice(0, 200);
         order.situation = label;
@@ -362,6 +366,24 @@ function build(): SampleWorld {
     tracking,
     items,
   };
+}
+
+/** Como o módulo grava um cancelamento: STATUS = CANC, situação "Envio cancelado", quem e quando na mensagem. */
+function markCancelled(s: Shipment, order: Order | undefined, when: Date, user: string) {
+  s.ok = false;
+  s.cancelled = true;
+  s.status = "X";
+  s.situationCode = "cancelled";
+  s.situation = "Envio cancelado";
+  s.situationWhen = when;
+  s.finished = true;
+  s.message = `${s.message ?? ""} | Cancelado na transportadora em ${when.toLocaleDateString("pt-BR")} ${when
+    .toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} por ${user}`;
+  if (order) {
+    order.status = "X";
+    order.situation = "Envio cancelado";
+    order.situationWhen = when;
+  }
 }
 
 const STEPS: [string, string][] = [
@@ -512,6 +534,28 @@ export const sampleSource: FreightSource = {
     return boxes.length
       ? { ok: true, message: "Rastreio atualizado.", boxes }
       : { ok: false, message: "Este pedido ainda não tem envio para rastrear.", boxes: [] };
+  },
+
+  /* Como a Anjun: cancela só antes da coleta. */
+  async cancel(orderId) {
+    await delay(800);
+    const w = getWorld();
+    const s = w.dataset.shipments.find((x) => x.ok && (x.orderId === orderId || x.invoiceId === orderId));
+    if (!s) {
+      return { ok: false, message: "Este pedido não tem envio ativo para cancelar." };
+    }
+    if (s.status !== "S") {
+      return {
+        ok: false,
+        message: `A transportadora não cancelou o envio ${s.carrierOrder}: A Anjun não cancelou a caixa ${s.waybills[0]} (já coletado pela Anjun: não pode mais ser cancelado)`,
+      };
+    }
+    markCancelled(s, w.dataset.orders.find((o) => o.id === s.orderId), new Date(), "MATEUS");
+    w.tracking.delete(orderId);
+    return {
+      ok: true,
+      message: `Envio ${s.carrierOrder} cancelado na transportadora: as ${s.waybills.length} etiqueta(s) deixam de valer. O pedido pode ser cotado e enviado de novo.`,
+    };
   },
 
   async requote(orderId) {

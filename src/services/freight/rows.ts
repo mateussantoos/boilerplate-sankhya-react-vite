@@ -67,6 +67,7 @@ export function toShipment(r: Row): Shipment & { labels: string[] } {
     user: text(r.NOMEUSU),
     environment: env(r.AMBIENTE),
     ok: text(r.STATUS)?.toUpperCase() === "OK",
+    cancelled: text(r.STATUS)?.toUpperCase() === "CANC",
     customerNumber: text(r.CUSTOMERNUMBER),
     carrierOrder: text(r.ORDERNUMBER),
     waybills,

@@ -60,7 +60,7 @@ export function SettingsPage() {
 
       <Panel title='Botão "Cotar frete"' icon={MousePointerClick}>
         <p className="m-0 text-[13px] text-[#555]">
-          Para consultar o trajeto e recotar, a central chama o mesmo botão de ação do módulo (Rotina Java{" "}
+          Para consultar o trajeto, recotar e cancelar envios, a central chama o mesmo botão de ação do módulo (Rotina Java{" "}
           <code className="font-mono text-xs">br.com.brasfoot.freight.action.FreightQuoteAction</code>), como o pop-up faz. O id é encontrado
           sozinho na TSIBTA; se não for, informe-o abaixo.
         </p>
@@ -86,7 +86,7 @@ export function SettingsPage() {
           <Field label="Carregado em">{data ? data.loadedAt.toLocaleString("pt-BR") : "—"}</Field>
         </div>
         <ul className="mb-0 mt-4 pl-5 text-[13px] leading-relaxed text-[#555]">
-          <li>Tudo é lido das tabelas do módulo de frete; a central só escreve pelo botão do módulo (rastrear e recotar).</li>
+          <li>Tudo é lido das tabelas do módulo de frete; a central só escreve pelo botão do módulo (rastrear, recotar e cancelar envio).</li>
           <li>O trajeto de cada caixa vem ao vivo da transportadora: o banco guarda só a situação mais recente.</li>
           <li>Período, transportadora, ambiente e o menu recolhido ficam salvos neste navegador.</li>
         </ul>

@@ -32,6 +32,9 @@ export function statusFromCode(code: string | null | undefined): FreightStatus {
 
 /** Situação de um envio: a gravada no pedido, senão a do último código de rastreio. Recusado: null. */
 export function shipmentStatus(s: Shipment): FreightStatus | null {
+  if (s.cancelled) {
+    return "X";
+  }
   if (!s.ok) {
     return null;
   }
@@ -127,6 +130,7 @@ export interface Kpis {
   errorRate: number | null;
   shipments: number;
   refused: number;
+  cancelled: number;
   inTransit: number;
   requested: number;
   delivered: number;
@@ -162,7 +166,8 @@ export function kpis(v: View): Kpis {
     quoteErrors: v.quotes.length - okQuotes.length,
     errorRate: v.quotes.length ? (v.quotes.length - okQuotes.length) / v.quotes.length : null,
     shipments: okShipments.length,
-    refused: v.shipments.length - okShipments.length,
+    refused: v.shipments.filter((s) => !s.ok && !s.cancelled).length,
+    cancelled: v.shipments.filter((s) => s.cancelled).length,
     requested: v.open.filter((s) => shipmentStatus(s) === "S").length,
     inTransit: v.open.filter((s) => shipmentStatus(s) === "T").length,
     delivered: delivered.length,
@@ -325,7 +330,7 @@ export function attention(v: View, now = new Date()): Attention[] {
     }
   }
   for (const s of v.shipments) {
-    if (!s.ok && !shippedOrders.has(s.orderId ?? 0)) {
+    if (!s.ok && !s.cancelled && !shippedOrders.has(s.orderId ?? 0)) {
       out.push({
         kind: "refused",
         orderId: s.orderId ?? s.invoiceId ?? 0,
@@ -370,7 +375,7 @@ export function attention(v: View, now = new Date()): Attention[] {
 /* ------------------------------------------------------------------ atividade */
 
 export interface Activity {
-  kind: "quote" | "quoteError" | "shipment" | "refused" | "tracking";
+  kind: "quote" | "quoteError" | "shipment" | "refused" | "cancelled" | "tracking";
   when: Date;
   orderId: number;
   title: string;
@@ -394,11 +399,21 @@ export function activity(v: View, limit = 40): Activity[] {
   for (const s of v.allShipments) {
     if (s.when && inPeriod(v, s.when)) {
       out.push({
-        kind: s.ok ? "shipment" : "refused",
+        kind: s.ok || s.cancelled ? "shipment" : "refused",
         when: s.when,
         orderId: s.orderId ?? s.invoiceId ?? 0,
-        title: s.ok ? `Envio solicitado · NF ${s.invoiceNumber ?? "—"}` : "Envio recusado",
-        detail: `${s.customer ?? "—"} · ${s.ok ? `${s.waybills.length} etiqueta(s)` : s.message ?? ""}`,
+        title: s.ok || s.cancelled ? `Envio solicitado · NF ${s.invoiceNumber ?? "—"}` : "Envio recusado",
+        detail: `${s.customer ?? "—"} · ${s.ok || s.cancelled ? `${s.waybills.length} etiqueta(s)` : s.message ?? ""}`,
+      });
+    }
+    if (s.cancelled && s.situationWhen && inPeriod(v, s.situationWhen)) {
+      out.push({
+        kind: "cancelled",
+        when: s.situationWhen,
+        orderId: s.orderId ?? s.invoiceId ?? 0,
+        title: `Envio cancelado · NF ${s.invoiceNumber ?? "—"}`,
+        detail: `${s.customer ?? "—"} · ${s.carrierOrder ?? ""}`,
+        status: "X",
       });
     }
     if (s.ok && s.situationWhen && s.situation && inPeriod(v, s.situationWhen)) {
