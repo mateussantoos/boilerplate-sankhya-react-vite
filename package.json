@@ -1,15 +1,11 @@
 {
-  "name": "boilerplate-sankhya-react-vite",
-  "description": "Boilerplate for a Sankhya application using React and Vite",
+  "name": "brasfoot-sankhya-transportadora-html5",
+  "description": "Central de Fretes: componente de BI HTML5 do Sankhya com cotações, envios, rastreio e transportadoras do módulo de frete da Brasfoot",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
   "author": "Mateus Santos",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/mateussantoos/boilerplate-sankhya-react-vite"
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -18,6 +14,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
+    "lucide-react": "0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.16"
@@ -28,13 +25,13 @@
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
-    "vite-plugin-zip-pack": "^1.0.6",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vite-plugin-zip-pack": "^1.0.6"
   }
 }

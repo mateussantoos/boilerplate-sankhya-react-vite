@@ -12,7 +12,7 @@ export default defineConfig({
     tailwindcss(),
     zipPack({
       outDir: "dist",
-      outFileName: "sankhya-component.zip",
+      outFileName: "central-fretes.zip",
     }),
   ],
   build: {

@@ -4,11 +4,11 @@ prefix="snk" uri="/WEB-INF/tld/sankhyaUtil.tld" %> <%@ page
 import="br.com.sankhya.modelcore.auth.AuthenticationInfo" %>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>boilerplate-sankhya-react-vite</title>
+    <title>Central de Fretes</title>
 
     <!-- Injects the native Sankhya dashboard runtime.
          Provides the global helpers window.executeQuery / openApp / openLevel /
@@ -27,6 +27,8 @@ import="br.com.sankhya.modelcore.auth.AuthenticationInfo" %>
         AuthenticationInfo authInfo = (AuthenticationInfo) session.getAttribute("usuarioLogado");
         String userName = (authInfo != null) ? authInfo.getName() : "User";
         String userID = (authInfo != null) ? authInfo.getUserID().toString() : "CodeUser";
+        /* Nome dentro de string JS: escapa barra, aspas e "<" (um nome com apóstrofo quebrava o script). */
+        userName = userName.replace("\\", "\\\\").replace("'", "\\'").replace("<", "\\u003c");
       %>
       window.sankhyaUserInfo = { name: '<%= userName %>', id: '<%= userID %>' };
     </script>

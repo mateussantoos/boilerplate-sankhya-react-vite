@@ -1,210 +1,249 @@
 @import "tailwindcss";
 
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/*
+ * Central de Fretes — visual no padrão das telas HTML5 do Sankhya (Portal de Vendas):
+ * verde Sankhya para seleção e destaque, grafite no botão principal, painéis brancos com barra
+ * de título cinza, alertas e etiquetas no padrão Bootstrap 3, cantos pouco arredondados.
+ * Cores dos gráficos: paleta categórica validada (azul, laranja, verde-água) — ver src/components/charts.
+ */
+@theme {
+  --font-sans: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: Consolas, Menlo, monospace;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  --color-snk-green: #4caf50;
+  --color-snk-green-dark: #3d9140;
+  --color-snk-green-soft: #f1f8f1;
+  --color-snk-dark: #3f4752;
+  --color-snk-darker: #2f353d;
+  --color-snk-darkest: #262b31;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  --color-page: #f2f3f5;
+  --color-bar: #f2f2f2;
+  --color-line: #e5e5e5;
+  --color-edge: #d9d9d9;
+  --color-ink: #333333;
+  --color-muted: #777777;
+  --color-faint: #a3a3a3;
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
   }
-  a:hover {
-    color: #747bff;
+  body {
+    margin: 0;
+    background: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
   }
   button {
-    background-color: #f9f9f9;
+    font: inherit;
+  }
+  ::selection {
+    background: #c8e6c9;
   }
 }
 
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo-header {
-  height: 5em;
-  margin-bottom: 1rem;
-}
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-.logo.sankhya:hover {
-  filter: drop-shadow(0 0 2em #00ff00aa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+@layer components {
+  /* ---------------------------------------------------------------- botões */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      box-shadow 0.15s;
   }
-  to {
-    transform: rotate(360deg);
+  .btn:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 4px var(--color-snk-green);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .btn-primary {
+    background: var(--color-snk-dark);
+    border-color: var(--color-snk-dark);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--color-snk-darker);
+  }
+  .btn-success {
+    background: var(--color-snk-green);
+    border-color: var(--color-snk-green-dark);
+    color: #fff;
+  }
+  .btn-success:hover {
+    background: var(--color-snk-green-dark);
+  }
+  .btn-outline {
+    background: #f5f5f5;
+    border-color: #ccc;
+    color: var(--color-ink);
+  }
+  .btn-outline:hover {
+    background: #e8e8e8;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: #555;
+  }
+  .btn-ghost:hover {
+    background: #ececec;
+    color: var(--color-ink);
+  }
+  .btn-sm {
+    height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  .btn-icon {
+    width: 32px;
+    padding: 0;
+  }
+  .btn-sm.btn-icon {
+    width: 28px;
+  }
+
+  /* ---------------------------------------------------------------- campos */
+  .field {
+    height: 32px;
+    width: 100%;
+    padding: 0 9px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    background: #fff;
+    color: var(--color-ink);
+    font-size: 13px;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-snk-green);
+    box-shadow: 0 0 0 2px rgb(76 175 80 / 0.2);
+  }
+  select.field {
+    padding-right: 26px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+  .label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+  }
+
+  /* ---------------------------------------------------------------- painéis */
+  .panel {
+    border: 1px solid var(--color-edge);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 42px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--color-edge);
+    background: var(--color-bar);
+    border-radius: 3px 3px 0 0;
+  }
+  .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .panel-title svg {
+    color: var(--color-muted);
+  }
+
+  /* ---------------------------------------------------------------- grades */
+  .grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: #fff;
+  }
+  .grid-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: 34px;
+    padding: 0 10px;
+    border-bottom: 1px solid #ccc;
+    background: #fafafa;
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .grid-table td {
+    height: 36px;
+    padding: 4px 10px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+  }
+  .grid-table tbody tr:nth-child(even) td {
+    background: #fbfbfb;
+  }
+  .grid-table tbody tr.is-clickable {
+    cursor: pointer;
+  }
+  .grid-table tbody tr.is-clickable:hover td {
+    background: #eef6ee;
+  }
+  .grid-table tbody tr.is-selected td {
+    background: #dcedc8;
+  }
+  .num,
+  .grid-table th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-}
-
-.card-buttons {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.card-logos {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  margin-top: 1rem;
-  color: #888;
-}
-
-/* Dark UI adjustments for welcome card and table */
-.welcome-card {
-  margin: 0 auto 1rem auto;
-  max-width: 900px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1rem;
-  background-color: #1a1a1a; /* same as button */
-}
-.welcome-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: #f3f4f6; /* gray-100 */
-}
-.welcome-subtitle {
-  margin: 0.35rem 0 0 0;
-  color: #9ca3af; /* gray-400 */
-  font-size: 0.95rem;
-}
-
-.table-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin-top: 1rem;
-}
-.products-table {
-  width: 100%;
-  min-width: 520px;
-  border-collapse: collapse;
-  background-color: #1a1a1a; /* same as button */
-  border: 1px solid #374151; /* gray-700 */
-  border-radius: 12px;
-  overflow: hidden;
-}
-.products-table thead th {
-  text-align: left;
-  background-color: #1a1a1a; /* same as button */
-  color: #e5e7eb; /* gray-200 */
-  font-weight: 600;
-}
-.products-table th,
-.products-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #374151; /* gray-700 */
-  color: #e5e7eb; /* gray-200 */
-}
-.products-table tbody tr:hover td {
-  background-color: #1a1a1a; /* same as button */
-  opacity: 0.9;
-}
-
-@media (max-width: 640px) {
-  .welcome-title {
-    font-size: 1.1rem;
-  }
-  #root {
-    padding: 1rem;
-  }
-  .card-buttons {
-    flex-direction: column;
-  }
+/* Barras de rolagem discretas, como no Sankhya. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c4c4c4 transparent;
 }

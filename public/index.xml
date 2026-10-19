@@ -2,7 +2,7 @@
 <gadget>
   <level id="01O" description="Principal">
     <container orientacao="V" tamanhoRelativo="100">
-      <html5component id="BOILERPLATE_SANKHYA_REACT_VITE" entryPoint="index.jsp">
+      <html5component id="CENTRAL_FRETES" entryPoint="index.jsp">
       </html5component>
     </container>
   </level>
