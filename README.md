@@ -122,6 +122,7 @@ Atalho: `index.jsp?nunota=776934&aba=route` abre a central já no pedido. As aba
 Como cada parte funciona:
 
 - **Consultas.** Todo SQL está em [src/services/freight/sql.ts](src/services/freight/sql.ts). São só `SELECT`, pelo `executeQuery` nativo do `<snk:load/>`, uma de cada vez.
+- **Texto livre em Base64.** O `executeQuery` nativo monta o JSON da resposta sem escapar aspas, barras nem quebras de linha. Por isso nomes, endereços, mensagens, situações, JSON e URLs de etiqueta saem do SQL em Base64 (`T()` em `sql.ts`, alias `B64_…`), e a central decodifica cada coluna ([encoded.ts](src/services/freight/encoded.ts)). Toda coluna nova de texto digitado ou vindo da transportadora deve passar por `T()`.
 - **Estrutura ausente.** A central confere quais tabelas e colunas existem (`INFORMATION_SCHEMA`, com reserva no dicionário `TDDTAB`/`TDDCAM`) e só cita o que existe. Assim ela abre mesmo antes de rodar o **Instalar estrutura do frete**, e avisa o que falta.
 - **Trajeto.** O trajeto completo **não fica gravado**: o banco guarda só a situação mais recente. Por isso a aba Trajeto chama o botão do módulo, que consulta a transportadora e também atualiza a situação gravada.
 - **Chamadas ao botão.** Vão uma por vez, com até 2 novas tentativas em "situação de concorrência", como no pop-up ([src/services/freight/java.ts](src/services/freight/java.ts)).
@@ -157,7 +158,20 @@ Para atualizar, gere o zip de novo e reimporte no mesmo componente.
 pnpm install
 pnpm dev      # http://localhost:5173, com DADOS DE EXEMPLO (fora do Sankhya)
 pnpm lint
+pnpm test     # vitest: unidade + consultas num SQL Server de teste (Docker)
 pnpm build    # tsc + vite + dist/central-fretes.zip
+```
+
+**Testes.** Os testes de [tests/native-query.test.ts](tests/native-query.test.ts) rodam a central inteira contra um SQL Server de verdade:
+- `database.ts` → `source.ts` → mapeadores, com uma base Sankhya mínima cujos textos têm aspas, barras, acentos e quebras de linha;
+- um `executeQuery` nativo falso que devolve o JSON **sem escape nenhum**, o pior caso;
+- reproduzem o erro da cotação nº 34 com a consulta antiga.
+
+Sem o container, esses testes são pulados. Para subir o container:
+
+```bash
+docker run -d --name central-fretes-sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=Central#Fretes1 \
+  -e MSSQL_COLLATION=Latin1_General_CI_AI -p 14333:1433 mcr.microsoft.com/mssql/server:2019-latest
 ```
 
 Fora do Sankhya (sem o `executeQuery` nativo e fora de `/mge/`), a central usa [sample-source.ts](src/services/freight/sample-source.ts):
@@ -171,10 +185,12 @@ src/
   components/          layout (menu e filtros), ui (padrão Sankhya), charts (SVG), data-table,
                        order-drawer (detalhe do pedido), route-view (trajeto), feeds, json-viewer
   pages/               uma tela por arquivo
-  services/freight/    types, sql, rows (linha → objeto), source (Sankhya), sample-source (exemplo),
-                       java (botão do módulo), analytics (indicadores e pendências), status, boxes, format
+  services/freight/    types, sql, encoded (texto em Base64), rows (linha → objeto), source (Sankhya),
+                       sample-source (exemplo), java (botão do módulo), analytics (indicadores e pendências),
+                       status, boxes, format
   services/sankhya/    camada do boilerplate (executeQuery, removeFrame, openApp…)
 public/index.jsp       página de entrada no Sankhya (<snk:load/>, usuário logado)
+tests/                 vitest; support/ tem o SQL Server de teste e a base Sankhya mínima
 ```
 
 **Gráficos.** São SVG próprios, sem biblioteca. A paleta foi validada para daltonismo sobre fundo branco: azul `#2a78d6`, laranja `#eb6834` e verde-água `#1baf7a`, este último só com rótulo visível. Têm legenda quando há duas séries e dica ao passar o mouse.
@@ -193,6 +209,7 @@ Estes pontos só dão para validar dentro do Sankhya:
 
 | Versão | Mudanças |
 |---|---|
+| 1.1.2 | O visualizador de JSON quebrava com "Expected ',' or '}' after property value in JSON" (cotação nº 34, em produção): o `executeQuery` nativo não escapa as aspas nem as quebras de linha do texto. Agora o JSON e todo texto livre saem do SQL em Base64 e são decodificados na central, o que também protege as listas de nomes e mensagens com aspas. A central passa a ter testes automatizados (`pnpm test`), com as consultas rodando num SQL Server de teste |
 | 1.1.1 | Linha vazia devolvida por uma consulta sem resultado não vira mais registro: em produção, um pedido sem envio mostrava "Envio nº 0 · Recusado" com tudo vazio. Linhas sem valor e registros sem chave (NUNOTA, NUCOT, NUENVIO) são descartados, com aviso no console (F12) |
 | 1.1.0 | **Cancelar envio** no detalhe do pedido (aba Envio), pelo botão do módulo (`ACAO=CANCELAR`, módulo 2.4.0 ou mais novo), só antes da coleta e com confirmação. Envios cancelados (`STATUS = CANC`) aparecem como "Envio cancelado", com filtro próprio na tela Envios, e não contam como recusados nem como pendência |
 | 1.0.0 | Primeira versão: visão geral, pendências, pedidos, envios, rastreamento (com atualização em lote), cotações (com JSON), transportadoras, caixas e configurações; detalhe do pedido com trajeto ao vivo, recotar, etiquetas e itens; dados de exemplo para desenvolvimento |

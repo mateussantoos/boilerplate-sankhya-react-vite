@@ -1,5 +1,6 @@
 import { sankhyaService } from "@/services/sankhya";
 import type { SankhyaQueryParam } from "@/types/global";
+import { decodeRow } from "./encoded";
 import { num, text } from "./format";
 import { callButton, toActionReply, toQuoteReply, toTracking } from "./java";
 import { toBox, toCarrier, toOrder, toQuote, toShipment, type Row } from "./rows";
@@ -45,11 +46,30 @@ export const BUTTON_KEY = "central-frete.botao";
 
 let sqlQueue: Promise<unknown> = Promise.resolve();
 
-/** Uma consulta por vez (o Sankhya cancela chamadas simultâneas da mesma sessão). */
+/**
+ * Uma consulta por vez (o Sankhya cancela chamadas simultâneas da mesma sessão). As colunas de
+ * texto livre chegam em Base64 (B64_…) e saem decodificadas, com o nome sem o prefixo.
+ */
 function query(sql: string, params: SankhyaQueryParam[] = []): Promise<Row[]> {
-  const p = sqlQueue.then(async () => onlyRows(await sankhyaService.executeQuery(sql, params)));
+  const p = sqlQueue.then(async () => {
+    let result: unknown;
+    try {
+      result = await sankhyaService.executeQuery(sql, params);
+    } catch (e) {
+      throw e instanceof SyntaxError ? unreadable(e) : e;
+    }
+    return onlyRows(result).map(decodeRow);
+  });
   sqlQueue = p.catch(() => null);
   return p;
+}
+
+/** JSON.parse falhou: algum texto saiu do SQL sem passar por T() (sql.ts) e trouxe aspas ou quebra de linha. */
+function unreadable(e: SyntaxError): Error {
+  console.warn("[central-frete] resposta da consulta não é JSON válido", e);
+  return new Error(
+    `O Sankhya devolveu a consulta com texto que quebra o JSON (aspas ou quebra de linha sem escape): ${e.message}`
+  );
 }
 
 /**
