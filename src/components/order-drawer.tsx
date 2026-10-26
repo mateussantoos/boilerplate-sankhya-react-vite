@@ -8,6 +8,7 @@ import {
   FileText,
   ListOrdered,
   Package,
+  Printer,
   RefreshCw,
   Route,
   Send,
@@ -18,6 +19,7 @@ import { sankhyaService } from "@/services/sankhya";
 import { shipmentStatus, shortName } from "@/services/freight/analytics";
 import { boxTotal, boxVolumeCm3, describeBoxes, isLarge, parseBoxes } from "@/services/freight/boxes";
 import { fmtDate, fmtDateTime, fmtDays, fmtDecimal, fmtKg, fmtM3, fmtMoney, fmtNumber, fmtZip } from "@/services/freight/format";
+import { downloadPdf, labelsA4, labelsFileName } from "@/services/freight/labels";
 import type { BoxType, OrderDetail, Quote, TrackingReply } from "@/services/freight/types";
 import { JsonViewer } from "./json-viewer";
 import { Milestones, RouteHeader, Timeline, groupBoxes } from "./route-view";
@@ -521,6 +523,7 @@ function ShipmentTab({
   onCancel: (s: OrderDetail["shipments"][number]) => void;
   cancelling: boolean;
 }) {
+  const [printing, setPrinting] = useState<number | null>(null);
   if (!detail.shipments.length) {
     return (
       <Empty icon={Send} title="Envio ainda não solicitado">
@@ -533,6 +536,21 @@ function ShipmentTab({
       () => notify("success", "Copiado."),
       () => notify("error", "Não foi possível copiar.")
     );
+  const printA4 = async (s: OrderDetail["shipments"][number]) => {
+    setPrinting(s.id);
+    try {
+      const r = await labelsA4(s.labels.filter(Boolean));
+      downloadPdf(r.bytes, labelsFileName(s.carrierOrder, s.id));
+      notify(
+        "success",
+        `Etiquetas em A4: ${r.labels} ${r.labels === 1 ? "etiqueta" : "etiquetas"} em ${r.pages} ${r.pages === 1 ? "folha" : "folhas"}. Imprima em tamanho real (100%).`
+      );
+    } catch (e) {
+      notify("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setPrinting(null);
+    }
+  };
   return (
     <div className="flex flex-col gap-4">
       {detail.shipments.map((s) => (
@@ -595,9 +613,22 @@ function ShipmentTab({
               <div className="mt-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <b className="text-[13px]">Etiquetas e códigos de rastreio ({s.waybills.length})</b>
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => copy(s.waybills.join(", "))}>
-                    <Copy size={12} /> Copiar códigos
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {!s.cancelled && s.labels.some(Boolean) && (
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={printing === s.id}
+                        title="Todas as etiquetas num PDF, 4 por folha A4"
+                        onClick={() => printA4(s)}
+                      >
+                        {printing === s.id ? <Spinner /> : <Printer size={12} />} Etiquetas em A4
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => copy(s.waybills.join(", "))}>
+                      <Copy size={12} /> Copiar códigos
+                    </button>
+                  </div>
                 </div>
                 <ul className="m-0 grid list-none gap-1.5 p-0 sm:grid-cols-2">
                   {s.waybills.map((w, i) => (

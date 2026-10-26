@@ -185,7 +185,7 @@ src/
   components/          layout (menu e filtros), ui (padrão Sankhya), charts (SVG), data-table,
                        order-drawer (detalhe do pedido), route-view (trajeto), feeds, json-viewer
   pages/               uma tela por arquivo
-  services/freight/    types, sql, encoded (texto em Base64), rows (linha → objeto), source (Sankhya),
+  services/freight/    types, sql, encoded (texto em Base64), labels (etiquetas em A4), rows (linha → objeto), source (Sankhya),
                        sample-source (exemplo), java (botão do módulo), analytics (indicadores e pendências),
                        status, boxes, format
   services/sankhya/    camada do boilerplate (executeQuery, removeFrame, openApp…)
@@ -209,6 +209,7 @@ Estes pontos só dão para validar dentro do Sankhya:
 
 | Versão | Mudanças |
 |---|---|
+| 1.2.0 | **Etiquetas em A4** na aba Envio do detalhe: um PDF só com todas as etiquetas do envio, 4 por folha A4 (2 × 2, com linhas de corte), para impressora comum. A etiqueta da Anjun (100 × 150 mm) sai a ~95% (≈ 95 × 143 mm), inteira; a Anjun aceita (Higor, 26/10/2026). Montado no navegador ([labels.ts](src/services/freight/labels.ts), pdf-lib carregado só no clique), com as etiquetas baixadas direto da Anjun. O pop-up do módulo 2.5.0 faz a mesma conta. Imprima em tamanho real (100%) |
 | 1.1.2 | O visualizador de JSON quebrava com "Expected ',' or '}' after property value in JSON" (cotação nº 34, em produção): o `executeQuery` nativo não escapa as aspas nem as quebras de linha do texto. Agora o JSON e todo texto livre saem do SQL em Base64 e são decodificados na central, o que também protege as listas de nomes e mensagens com aspas. A central passa a ter testes automatizados (`pnpm test`), com as consultas rodando num SQL Server de teste |
 | 1.1.1 | Linha vazia devolvida por uma consulta sem resultado não vira mais registro: em produção, um pedido sem envio mostrava "Envio nº 0 · Recusado" com tudo vazio. Linhas sem valor e registros sem chave (NUNOTA, NUCOT, NUENVIO) são descartados, com aviso no console (F12) |
 | 1.1.0 | **Cancelar envio** no detalhe do pedido (aba Envio), pelo botão do módulo (`ACAO=CANCELAR`, módulo 2.4.0 ou mais novo), só antes da coleta e com confirmação. Envios cancelados (`STATUS = CANC`) aparecem como "Envio cancelado", com filtro próprio na tela Envios, e não contam como recusados nem como pendência |
