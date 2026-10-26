@@ -193,6 +193,7 @@ Estes pontos só dão para validar dentro do Sankhya:
 
 | Versão | Mudanças |
 |---|---|
+| 1.1.1 | Linha vazia devolvida por uma consulta sem resultado não vira mais registro: em produção, um pedido sem envio mostrava "Envio nº 0 · Recusado" com tudo vazio. Linhas sem valor e registros sem chave (NUNOTA, NUCOT, NUENVIO) são descartados, com aviso no console (F12) |
 | 1.1.0 | **Cancelar envio** no detalhe do pedido (aba Envio), pelo botão do módulo (`ACAO=CANCELAR`, módulo 2.4.0 ou mais novo), só antes da coleta e com confirmação. Envios cancelados (`STATUS = CANC`) aparecem como "Envio cancelado", com filtro próprio na tela Envios, e não contam como recusados nem como pendência |
 | 1.0.0 | Primeira versão: visão geral, pendências, pedidos, envios, rastreamento (com atualização em lote), cotações (com JSON), transportadoras, caixas e configurações; detalhe do pedido com trajeto ao vivo, recotar, etiquetas e itens; dados de exemplo para desenvolvimento |
 

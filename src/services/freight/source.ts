@@ -47,10 +47,32 @@ let sqlQueue: Promise<unknown> = Promise.resolve();
 
 /** Uma consulta por vez (o Sankhya cancela chamadas simultâneas da mesma sessão). */
 function query(sql: string, params: SankhyaQueryParam[] = []): Promise<Row[]> {
-  const p = sqlQueue.then(() => sankhyaService.executeQuery(sql, params) as Promise<Row[]>);
+  const p = sqlQueue.then(async () => onlyRows(await sankhyaService.executeQuery(sql, params)));
   sqlQueue = p.catch(() => null);
   return p;
 }
+
+/**
+ * Só linhas de verdade. Em produção (26/10/2026) uma consulta de envios sem resultado chegou como uma
+ * linha vazia e a central mostrou um "Envio nº 0 · Recusado" que não existia: linha sem nenhum valor
+ * é descartada (e registrada no console para diagnóstico).
+ */
+function onlyRows(result: unknown): Row[] {
+  if (!Array.isArray(result)) {
+    if (result != null) console.warn("[central-frete] consulta não devolveu lista", result);
+    return [];
+  }
+  const rows = result.filter(
+    (r): r is Row => !!r && typeof r === "object" && Object.values(r as Row).some((v) => v != null && v !== "")
+  );
+  if (rows.length !== result.length) {
+    console.warn("[central-frete] linhas vazias descartadas", result.length - rows.length, result);
+  }
+  return rows;
+}
+
+/** Registro sem chave (NUNOTA, NUCOT, NUENVIO…) não entra na tela. */
+const withKey = <T extends { id: number }>(list: T[]): T[] => list.filter((x) => x.id > 0);
 
 const S = (value: string): SankhyaQueryParam => ({ value, type: "S" });
 const I = (value: number): SankhyaQueryParam => ({ value, type: "I" });
@@ -94,11 +116,11 @@ export const sankhyaSource: FreightSource = {
     const setup = await loadSetup();
 
     progress?.("Carregando cotações…");
-    const quotes = setup.quotes ? (await query(SQL.QUOTES, range)).map(toQuote) : [];
+    const quotes = setup.quotes ? withKey((await query(SQL.QUOTES, range)).map(toQuote)) : [];
 
     progress?.("Carregando envios…");
     const shipments = setup.shipments
-      ? (await query(SQL.shipments(setup), range)).map(toShipment)
+      ? withKey((await query(SQL.shipments(setup), range)).map(toShipment))
       : [];
 
     progress?.("Carregando pedidos…");
@@ -109,16 +131,16 @@ export const sankhyaSource: FreightSource = {
             ordersSql.sql,
             Array.from({ length: ordersSql.periods }).flatMap(() => range)
           )
-        ).map(toOrder)
+        ).map(toOrder).filter((o) => o.id > 0)
       : [];
 
     progress?.("Carregando caixas e transportadoras…");
-    const boxes = setup.boxes ? (await query(SQL.BOXES)).map(toBox) : [];
+    const boxes = setup.boxes ? withKey((await query(SQL.BOXES)).map(toBox)) : [];
     const carrierIds = new Set<number>(INTEGRATED_CARRIERS);
     quotes.forEach((q) => q.carrierId && carrierIds.add(q.carrierId));
     shipments.forEach((s) => s.carrierId && carrierIds.add(s.carrierId));
     orders.forEach((o) => o.carrierId && carrierIds.add(o.carrierId));
-    const carriers = (await query(SQL.carriers([...carrierIds]))).map(toCarrier);
+    const carriers = withKey((await query(SQL.carriers([...carrierIds]))).map(toCarrier));
 
     return { setup, quotes, shipments, orders, boxes, carriers, loadedAt: new Date(), sample: false };
   },
@@ -129,9 +151,9 @@ export const sankhyaSource: FreightSource = {
       throw new Error(`Registro ${orderId} não encontrado na TGFCAB.`);
     }
     const order = toOrder(header[0]);
-    const shipments = setup.shipments ? (await query(SQL.shipmentsOf(setup, [orderId]))).map(toShipment) : [];
+    const shipments = setup.shipments ? withKey((await query(SQL.shipmentsOf(setup, [orderId]))).map(toShipment)) : [];
     const linked = [orderId, ...shipments.flatMap((s) => [s.invoiceId ?? 0, s.orderId ?? 0])];
-    const quotes = setup.quotes ? (await query(SQL.quotesOf(linked))).map(toQuote) : [];
+    const quotes = setup.quotes ? withKey((await query(SQL.quotesOf(linked))).map(toQuote)) : [];
     const items = (await query(SQL.ITEMS, [I(orderId)])).map((r) => ({
       sequence: num(r.SEQUENCIA) ?? 0,
       productId: num(r.CODPROD) ?? 0,
