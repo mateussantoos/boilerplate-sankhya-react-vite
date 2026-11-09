@@ -18,7 +18,7 @@ export interface Toast {
   text: string;
 }
 
-interface CentralState {
+export interface CentralState {
   source: FreightSource;
   filters: Filters;
   setFilters: (f: Partial<Filters>) => void;
@@ -44,6 +44,9 @@ interface CentralState {
 export type OrderStatusFilter = "all" | "none" | FreightStatus;
 
 const Ctx = createContext<CentralState | undefined>(undefined);
+
+/** Para testes: monta um componente com um estado da central feito à mão. */
+export const CentralContext = Ctx;
 
 const FILTERS_KEY = "central-frete.filtros";
 
@@ -170,6 +173,8 @@ export function CentralProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 8000 : 4500);
   }, []);
 
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+
   const value: CentralState = {
     source,
     filters,
@@ -179,7 +184,7 @@ export function CentralProvider({ children }: { children: ReactNode }) {
     loading,
     progress,
     error,
-    reload: () => setTick((t) => t + 1),
+    reload,
     page,
     go,
     drawer,

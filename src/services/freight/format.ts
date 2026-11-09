@@ -110,7 +110,9 @@ export function parseDate(v: unknown): Date | null {
   if (m) {
     return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
   }
-  m = /^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+  /* dd/mm/yyyy (Sankhya) e dd-mm-yyyy (rastreio da Anjun: "03-11-2026 14:42:45"). Sem isto o navegador lia
+     03-11 como 11 de março e 31-10 como data inválida. */
+  m = /^(\d{2})[/-](\d{2})[/-](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
   if (m) {
     return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
   }

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Hourglass, Package, RefreshCw, Route, Square } from "lucide-react";
 import { useCentral } from "@/app/central-context";
 import { Alert, Empty, STATUS_ICON, Spinner, cx } from "@/components/ui";
-import { STALE_DAYS, shipmentStatus, shortName } from "@/services/freight/analytics";
+import { STALE_DAYS, shipmentStatus, shortName, staleTracking } from "@/services/freight/analytics";
 import { daysBetween, fmtAgo, fmtDateTime, fmtNumber } from "@/services/freight/format";
 import { STATUS_LABEL } from "@/services/freight/status";
 import type { FreightStatus, Shipment } from "@/services/freight/types";
@@ -62,6 +62,7 @@ export function TrackingPage() {
   };
 
   const now = new Date();
+  const stale = staleTracking(open, now);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -89,6 +90,15 @@ export function TrackingPage() {
           </button>
         )}
       </div>
+      {stale.length > 0 && !run && (
+        <Alert kind="warning">
+          <b>
+            {stale.length === 1 ? "1 envio está" : `${stale.length} envios estão`} sem consulta de rastreio há mais de {STALE_DAYS} dias.
+          </b>{" "}
+          A ação agendada do módulo (<code>TrackingRefreshJob</code>) consulta a Anjun a cada 2 horas; se ela estivesse rodando, nenhum
+          envio ficaria assim. Confira no Sankhya se ela está cadastrada e ativa. Para atualizar agora, use "Atualizar rastreio de todos".
+        </Alert>
+      )}
       {source.sample && (
         <Alert kind="info">Fora do Sankhya a consulta é simulada; dentro dele, cada pedido chama a ação RASTREAR do botão Cotar frete.</Alert>
       )}

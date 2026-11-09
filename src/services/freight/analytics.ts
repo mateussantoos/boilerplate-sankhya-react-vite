@@ -31,6 +31,19 @@ export function statusFromCode(code: string | null | undefined): FreightStatus {
 }
 
 /** Situação de um envio: a gravada no pedido, senão a do último código de rastreio. Recusado: null. */
+/**
+ * Envios em acompanhamento sem consulta de rastreio há mais de STALE_DAYS. A ação agendada do módulo
+ * (TrackingRefreshJob) consulta todos a cada 2 horas e regrava DHSITUACAO mesmo sem novidade: se ela
+ * estiver rodando, esta lista fica vazia. Em produção (09/11/2026) a nota 785098 ficou 13 dias como
+ * "Aguardando coleta" já entregue, porque nenhuma consulta automática rodou desde 29/10.
+ */
+export function staleTracking(open: Shipment[], now = new Date()): Shipment[] {
+  return open.filter((s) => {
+    const last = s.situationWhen ?? s.when;
+    return s.ok && !s.finished && !!last && daysBetween(last, now) > STALE_DAYS;
+  });
+}
+
 export function shipmentStatus(s: Shipment): FreightStatus | null {
   if (s.cancelled) {
     return "X";

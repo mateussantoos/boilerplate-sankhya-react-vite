@@ -1,5 +1,5 @@
 import { getCookie } from "@/services/sankhya/utils";
-import { num, text } from "./format";
+import { num, parseDate, text } from "./format";
 import { asStatus } from "./status";
 import type { ActionReply, BoxTracking, QuoteReply, TrackingReply } from "./types";
 
@@ -100,6 +100,18 @@ export function callButton(buttonId: number, command: string, orderId: number): 
   return p;
 }
 
+/**
+ * Eventos do mais recente ao mais antigo pela data de verdade. O módulo até a 2.5.1 ordenava o texto da
+ * data ("31-10-2026" antes de "03-11-2026") e a entrega aparecia no fim do trajeto. Sem data: no fim, na
+ * ordem em que vieram.
+ */
+export function newestFirst<T extends { when: string | null }>(events: T[]): T[] {
+  return events
+    .map((e, i) => ({ e, i, t: parseDate(e.when)?.getTime() ?? null }))
+    .sort((a, b) => (a.t == null ? (b.t == null ? a.i - b.i : 1) : b.t == null ? -1 : b.t - a.t || a.i - b.i))
+    .map((x) => x.e);
+}
+
 /** Resposta do RASTREAR → caixas com o trajeto (eventos mais recentes primeiro). */
 export function toTracking(reply: any, orderId: number): TrackingReply {
   const order =
@@ -108,13 +120,15 @@ export function toTracking(reply: any, orderId: number): TrackingReply {
     waybill: String(t.waybill ?? ""),
     label: text(t.label) || "Sem movimentação",
     status: asStatus(t.status) || "S",
-    events: (t.events || []).map((e: any) => ({
-      when: text(e.when),
-      label: text(e.label) || "—",
-      place: text(e.place),
-      problem: text(e.problem),
-      code: text(e.code),
-    })),
+    events: newestFirst(
+      (t.events || []).map((e: any) => ({
+        when: text(e.when),
+        label: text(e.label) || "—",
+        place: text(e.place),
+        problem: text(e.problem),
+        code: text(e.code),
+      }))
+    ),
   }));
   return {
     ok: !!reply?.ok,

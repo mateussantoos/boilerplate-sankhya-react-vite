@@ -43,12 +43,17 @@ export function OrderDrawer() {
   const tab = drawer?.tab ?? "summary";
   const setTab = (t: DrawerTab) => orderId && openOrder(orderId, t);
 
+  /* Outro pedido: começa do zero. */
   useEffect(() => {
-    if (!orderId || !data) return;
-    let alive = true;
     setDetail(null);
     setError(null);
     setTracking(null);
+  }, [orderId]);
+
+  /* Detalhe do banco; numa recarga (data novo) troca no lugar, sem apagar a tela nem refazer o trajeto. */
+  useEffect(() => {
+    if (!orderId || !data) return;
+    let alive = true;
     source
       .loadOrderDetail(orderId, data.setup)
       .then((d) => alive && setDetail(d))
@@ -67,10 +72,12 @@ export function OrderDrawer() {
       const reply = await source.track(orderId);
       setTracking({ reply, at: new Date() });
       if (!reply.ok && reply.message) notify("error", reply.message);
+      /* O módulo gravou a situação nova: recarrega para o quadro e as listas mostrarem o mesmo que o trajeto. */
+      if (reply.ok) reload();
     } finally {
       setTrackingBusy(false);
     }
-  }, [orderId, source, notify]);
+  }, [orderId, source, notify, reload]);
 
   /* Trajeto: consulta a transportadora na primeira vez que a aba abre. */
   useEffect(() => {
